@@ -35,7 +35,7 @@ export const VIP_SHEEN_LIGHT =
 export const BRAND_GRADIENT = VIP_GRADIENT
 
 /** 爱发电捐助入口：关于页与顶栏共用，避免重复硬编码 */
-export const AFDIAN_URL = 'https://afdian.com/a/torres'
+export const AFDIAN_URL = 'https://afdian.com/a/https53jj'
 
 /** 偏阅读设计：标题用衬线字族（玫红主题下保留纸感阅读氛围） */
 export const HEADING_FONT =
