@@ -1,0 +1,45 @@
+# ---- 依赖 ----
+node_modules/
+.npm-cache/
+
+# ---- 构建产物 ----
+# 前端构建产物由 npm run build 生成，不入库。
+# 但 internal/web/dist/ 目录本身必须存在（go:embed 要求），
+# 因此只排除带哈希的 assets/，保留占位用的 index.html。
+mccms-go/internal/web/dist/assets/
+/dist/
+/build/
+*.egg-info/
+mccms-go/mccmsd
+*.exe
+
+# ---- Go 环境与缓存 ----
+# 本项目把 GOPATH / 构建缓存放在工作区内，避免写工作区外的目录
+.gopath/
+.gocache/
+.gomodcache/
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.probe/
+
+# ---- 运行产物 ----
+# 下载下来的漫画内容一律不入库
+downloads/
+mccms/downloads/
+
+# ---- 本机专用 ----
+goenv.sh
+.scratch-*/
+# gh 的配置目录（内含 OAuth token），绝不入库
+.gh-config/
+
+# ---- 编辑器 / 系统 ----
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*~

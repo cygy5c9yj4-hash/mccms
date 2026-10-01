@@ -1,0 +1,103 @@
+// API 客户端：统一处理后端信封 {st,msg,data}、{detail} 错误体与登录门 st=1014。
+// 所有响应 HTTP 状态恒为 200（除 FastAPI 风格 4xx），以 st 判定业务结果。
+
+export const API_BASE = import.meta.env.VITE_API_BASE ?? ''
+
+export const STATUS_OK = 1001
+export const STATUS_NOT_LOGIN = 1014
+
+export const UNAUTHORIZED_EVENT = 'aura:unauthorized'
+
+/** 当前站点（由 site.tsx 写入 localStorage）；后端是多站点的，所有请求都要带上。 */
+function currentSite(): string {
+  try {
+    return localStorage.getItem('mccms.site') || 'tibiu'
+  } catch {
+    return 'tibiu'
+  }
+}
+
+/** 给请求路径补上 site 参数（已显式带 site 的不动）。 */
+function withSite(path: string): string {
+  if (!path.startsWith('/api/')) return path
+  if (/[?&]site=/.test(path)) return path
+  return path + (path.includes('?') ? '&' : '?') + 'site=' + encodeURIComponent(currentSite())
+}
+
+export class ApiError extends Error {
+  readonly st: number
+  readonly httpStatus: number
+
+  constructor(st: number, message: string, httpStatus = 0) {
+    super(message)
+    this.name = 'ApiError'
+    this.st = st
+    this.httpStatus = httpStatus
+  }
+}
+
+interface EnvelopeBody {
+  st?: number
+  msg?: string
+  data?: unknown
+  detail?: unknown
+}
+
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  let res: Response
+  try {
+    res = await fetch(API_BASE + withSite(path), { credentials: 'same-origin', ...init })
+  } catch {
+    throw new ApiError(-1, '网络错误：无法连接服务器')
+  }
+  let body: EnvelopeBody = {}
+  try {
+    body = (await res.json()) as EnvelopeBody
+  } catch {
+    /* 空响应体或非 JSON */
+  }
+  if (body.detail !== undefined || (!res.ok && body.st === undefined)) {
+    const detail =
+      typeof body.detail === 'string' ? body.detail : `请求失败（HTTP ${res.status}）`
+    throw new ApiError(-1, detail, res.status)
+  }
+  const st = typeof body.st === 'number' ? body.st : res.ok ? STATUS_OK : -1
+  if (st === STATUS_NOT_LOGIN) {
+    window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
+    throw new ApiError(STATUS_NOT_LOGIN, '请先登录 JM 账号', res.status)
+  }
+  if (st !== STATUS_OK) {
+    throw new ApiError(st, body.msg || `请求失败（st=${st}）`, res.status)
+  }
+  // 信封端点返回 data；legacy 裸响应（如 /api/config，st 内嵌且无 data 键）返回整个响应体。
+  return (body.data !== undefined ? body.data : body) as T
+}
+
+function jsonInit(method: string, body?: unknown): RequestInit {
+  return {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body === undefined ? '' : JSON.stringify(body),
+  }
+}
+
+function qs(params: Record<string, string | number | undefined | null>): string {
+  const sp = new URLSearchParams()
+  for (const [k, v] of Object.entries(params)) {
+    if (v === undefined || v === null || v === '') continue
+    sp.set(k, String(v))
+  }
+  const s = sp.toString()
+  return s ? `?${s}` : ''
+}
+
+export const api = {
+  get: <T>(path: string) => request<T>(path),
+  post: <T>(path: string, body?: unknown) => request<T>(path, jsonInit('POST', body)),
+  put: <T>(path: string, body?: unknown) => request<T>(path, jsonInit('PUT', body)),
+  del: <T>(path: string, body?: unknown) => request<T>(path, jsonInit('DELETE', body)),
+  postForm: <T>(path: string, form: FormData) =>
+    request<T>(path, { method: 'POST', body: form }),
+  qs,
+  url: (path: string) => API_BASE + withSite(path),
+}

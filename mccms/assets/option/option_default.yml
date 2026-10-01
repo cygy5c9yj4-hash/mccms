@@ -1,0 +1,242 @@
+# =====================================================================================
+# mccms 全量默认配置（option_default.yml）
+#
+# 本文件的每一个 key 都与源码中的默认值一一对应，来源：
+#   src/mccms/mc_config.py  ->  McModuleConfig.DEFAULT_OPTION_DICT / option_default_dict()
+#   src/mccms/mc_option.py  ->  McOption / DirRule
+#
+# 用法：
+#   option = mccms.create_option_by_file('assets/option/option_default.yml')
+#   mccms.download_comic('17001', option)
+#
+# 注意：option 的四个配置段（dir_rule / download / client / plugins）在构造时必须有，
+#       缺少任意一段都会抛 McException；只写你想覆盖的 key 也可以，其余会自动合并默认值。
+#
+# 关于 ${环境变量}：本库只在这两个位置展开 ${ENV_VAR}：
+#   1. dir_rule.base_dir
+#   2. 插件 kwargs 中的字符串值（例如 zip 的 zip_dir）
+#   其余位置（client.cookies 等）里的 ${...} 不会被展开，会按字面量原样发送。
+# =====================================================================================
+
+# --------------------------------------------------------------------------------------
+# 顶层
+# --------------------------------------------------------------------------------------
+
+# 写出配置时使用的版本号。读取 option 时该 key 会被直接丢弃（本库不做版本分支判断），
+# 仅用于和 jmcomic 的 option 文件保持字段兼容。
+version: '2.1'
+
+# 日志开关，默认 true。
+#   true    -> 普通日志（标准输出，带时间/线程/topic）
+#   false   -> 调用 disable_mc_log()，全局关闭 mccms 的日志
+#   pretty  -> 调用 enable_pretty_log()，按 topic 上色的彩色日志
+# 该 key 不会传给 McOption.__init__。
+log: true
+
+# --------------------------------------------------------------------------------------
+# dir_rule：下载目录规则
+# --------------------------------------------------------------------------------------
+
+dir_rule:
+  # 路径 DSL，默认 'Bd_Cname_Chindextitle'。
+  #   Bd             = base_dir
+  #   Cxxx           = 漫画（McComicDetail）字段
+  #   Chxxx          = 章节（McChapterDetail）字段
+  #   {Cname}_{Chindex:03} = f-string 写法
+  # 分隔符用 '_' 或 '/'；如果字段名本身含下划线（如 Chupdate_date），必须改用 '/' 分隔。
+  rule: Bd_Cname_Chindextitle
+
+  # 下载根目录，默认 null -> 运行时取 os.getcwd()。
+  # 支持 ${ENV_VAR}，例如：base_dir: ${MCCMS_DOWNLOAD_DIR}/mccms
+  base_dir: null
+
+  # 目录/文件名繁简体归一化，默认 null（不转换）。
+  # 需要可选依赖 zhconv（pip install zhconv），取值形如 'zh-cn' / 'zh-tw'；
+  # 未安装 zhconv 时静默返回原文，不报错。
+  normalize_zh: null
+
+# --------------------------------------------------------------------------------------
+# download：下载行为
+# --------------------------------------------------------------------------------------
+
+download:
+  # 目标文件已存在时是否跳过下载（断点/去重），默认 true。
+  # 对应 McOption.decide_download_cache(image)。
+  cache: true
+
+  image:
+    # 是否"解码"图片，默认 true。本库对齐 jmcomic 保留了这个开关，但两个站点的图片
+    # 都是明文直出，因此当前实现不会对图片做任何变换（详见
+    # AbstractMcClient.download_by_image_detail 的说明）。.gif 恒为 false。
+    decode: true
+
+    # 统一改写保存的后缀，默认 null（保持原后缀）。
+    # 例：'.jpg' 会把 .webp 也存成 .jpg（只是改文件名，不做转码）；.gif 不受影响。
+    suffix: null
+
+  threading:
+    # 同时下载的图片线程数，默认 30。
+    # 对应 McOption.decide_image_batch_count(chapter)。
+    image: 30
+
+    # 同时下载的章节线程数。省略该 key 或显式写 null，运行时都会兜底为 os.cpu_count()。
+    # 对应 McOption.decide_chapter_batch_count(comic)。
+    chapter: null
+
+# --------------------------------------------------------------------------------------
+# client：站点客户端与网络
+# --------------------------------------------------------------------------------------
+
+client:
+  # 客户端实现 key。
+  # 内置：tibiu（TIBIU，纯 JSON API）/ manhwa（漫蛙，JSON + HTML 混合）。
+  # 也可以填自己 McModuleConfig.register_client(...) 注册的 client_key。
+  # 省略该 key 或显式写 null 都会在运行时兜底为 'tibiu'
+  #（见 McModuleConfig.fill_runtime_defaults）。
+  impl: tibiu
+
+  # 单请求重试次数，默认 3。连续失败 2 次的域名会被换掉（多域名时）。
+  retry_times: 3
+
+  # 域名列表，默认 []（空 -> 用内置域名）。
+  # 三种写法：
+  #   domain: []                                  # 用内置域名
+  #   domain: "a.example.com\nb.example.com"      # 多行字符串
+  #   domain: {tibiu: [a.example.com], manhwa: [b.example.com]}   # 按 impl 区分
+  domain: []
+
+  # 自己的账号，默认 null（留空则不自动登录）。
+  # 填了 username + password 时，每次新建 client 都会自动调用 login()，
+  # 仅用于访问「该账号本身有权访问的内容」。
+  username: null
+  password: null
+
+  # 是否自动确认年龄门，默认 false。TIBIU 的限制级内容需要（等价于调用 client.confirm_adult()）。
+  confirm_adult: false
+
+  # 便捷 cookies 写法，默认不存在。这里写的内容会合并进 postman.meta_data.cookies，
+  # 随每个请求发送。留空则不带任何 cookie。
+  # cookies:
+  #   PHPSESSID: '你的会话值'
+
+  # 元数据缓存级别，默认 null。该 key 目前是「预留」的，本库未实现元数据缓存。
+  cache: null
+
+  postman:
+    # 请求实现类型，默认 'requests'。该 key 目前是「预留」的：
+    # 实际是否使用 curl_cffi 由下面的 meta_data.impersonate 决定。
+    type: requests
+
+    meta_data:
+      # 请求头，默认 null -> 使用 McModuleConfig.HTML_HEADERS_TEMPLATE 内置模板。
+      headers: null
+
+      # 代理，默认 null。支持 requests 的写法：{http: 'http://127.0.0.1:7890', https: '...'}
+      proxies: null
+
+      # cookies，默认 {}。与 client.cookies 合并后随请求发送。
+      cookies: {}
+
+      # 请求超时秒数，默认 20。
+      timeout: 20
+
+      # 浏览器 TLS 指纹伪装，默认不存在（不启用）。
+      # 装了可选依赖 curl-cffi 后可写：impersonate: chrome
+      #（此时 postman 会改用 curl_cffi 的 Session；未安装则回退 requests 并记一条日志）
+      # impersonate: chrome
+
+# --------------------------------------------------------------------------------------
+# plugins：插件
+# --------------------------------------------------------------------------------------
+
+plugins:
+  # 插件抛 PluginValidationException 时的全局策略，默认 'log'。
+  # 该 key 目前是「预留」的，本库未读取它（对齐 jmcomic 的字段形状）。
+  valid: log
+
+  # 插件依赖库缺失时的策略，默认 'failed-fast'。取值：
+  #   failed-fast     -> 报错（构造 option 时把错误写进日志；插件真正执行时抛异常）
+  #   auto-install    -> 自动执行 pip install
+  #   ignore-only-log -> 仅打印一条日志
+  # 注意：依赖检查发生在 McOption 构造阶段（check_plugins_dependencies），
+  #       检查失败本身只记录日志，不会中断 option 构造。
+  dependencies_strategy: failed-fast
+
+  # 事件分组：key 是事件名，value 是插件条目列表。
+  # 真正会被派发的事件（源码中的 call_all_plugin 调用点）：
+  #   after_init      构造 McOption 时（safe=True，异常只记日志）
+  #                   —— 适合放 login / image_suffix_filter / replace_path_string / log_topic_filter
+  #   before_comic    开始下载一本漫画前     额外参数：comic, downloader
+  #   after_comic     一本漫画下载完成后     额外参数：comic, downloader
+  #   before_chapter  开始下载一话前         额外参数：chapter, downloader
+  #   after_chapter   一话下载完成后         额外参数：chapter, downloader
+  #   before_image    下载单张图片前         额外参数：image, downloader
+  #   after_image     单张图片下载完成后     额外参数：image, downloader
+  #
+  # 单个插件条目的字段：
+  #   plugin: 插件 key（必须已注册，见 McOptionPlugin / McModuleConfig.register_plugin）
+  #   kwargs: 传给 plugin.invoke(**kwargs) 的参数；字符串值会展开 ${ENV_VAR}
+  #   log:    默认 true；false 等价于 plugin.log_enable = False
+  #   safe:   默认 true；true 时插件异常只记日志，false 时异常向上抛
+  #
+  # 下面给出全部 10 个内置插件的默认/示例写法，按需取消注释即可。
+  after_init: []
+  # after_init:
+  #   - plugin: login                       # 用「自己的」账号登录（可选）
+  #     kwargs:
+  #       username: ${MCCMS_USERNAME}
+  #       password: ${MCCMS_PASSWORD}
+  #   - plugin: image_suffix_filter         # 只要 jpg/png，其余跳过
+  #     kwargs:
+  #       allowed_orig_suffix: ['.jpg', '.png']
+  #   - plugin: replace_path_string         # 保存路径字符串替换
+  #     kwargs:
+  #       replace: {'[汉化组]': ''}
+  #   - plugin: log_topic_filter            # 只看白名单 topic 的日志
+  #     kwargs:
+  #       whitelist: ['plugin', 'comic']
+
+  before_comic: []
+  # before_comic:
+  #   - plugin: download_cover              # 下载封面（会把封面记进下载清单）
+  #     kwargs:
+  #       dir_rule: {rule: Bd_Cname, base_dir: ./downloads/cover}
+  #       size: ''
+
+  after_comic: []
+  # after_comic:
+  #   - plugin: zip                         # 整本打包成一个 zip
+  #     kwargs:
+  #       zip_dir: ./zip
+  #       filename_rule: Cname
+  #       suffix: zip
+  #       delete_original_file: false
+  #       # encrypt: {password: '1234'}      # 加密需要 pyzipper
+  #   - plugin: img2pdf                     # 每话一个 PDF（需要 img2pdf）
+  #     kwargs:
+  #       pdf_dir: ./pdf
+  #       filename_rule: Chindextitle
+  #   - plugin: delete_duplicated_files     # 按 MD5 删除重复图片
+  #     kwargs:
+  #       limit: 2
+  #       delete_original_file: true        # 注意：默认就是 true，会真的删文件
+
+  before_chapter: []
+  # before_chapter:
+  #   - plugin: skip_chapter_with_few_images   # 图片太少的章节直接跳过
+  #     kwargs:
+  #       at_least_image_count: 3
+
+  after_chapter: []
+  # after_chapter:
+  #   - plugin: zip                         # 每话打包成一个 zip
+  #     kwargs:
+  #       zip_dir: ./zip
+  #       filename_rule: Chindextitle
+  #   - plugin: long_img                    # 每话拼一张长图（需要 pillow）
+  #     kwargs:
+  #       img_dir: ./long_img
+  #       filename_rule: Chindextitle
+
+  before_image: []
+  after_image: []

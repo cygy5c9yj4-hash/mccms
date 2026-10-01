@@ -1,0 +1,10 @@
+# 构建产物
+/mccmsd
+/dist/
+
+# Go 缓存（工作区内）
+../.gopath/
+../.gocache/
+
+# 下载目录
+/downloads/
