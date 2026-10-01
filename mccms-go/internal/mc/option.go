@@ -16,7 +16,7 @@ import (
 //
 //  1. Bd               —— base_dir
 //  2. Cxxx / Chxxx     —— 漫画 / 章节实体的字段
-//  3. {Cid}_{Chindex:03} —— Go 模板风格（对齐 Python 版的 f-string 写法）
+//  3. {Cid}_{Chindex:03} —— Go 模板风格
 type DirRule struct {
 	BaseDir     string `yaml:"base_dir"`
 	Rule        string `yaml:"rule"`
@@ -393,7 +393,7 @@ func mustGetwd() string {
 
 var reEnv = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 
-// ExpandEnv 展开 ${VAR}；未设置时保留原串（与 Python 版的报错行为不同，
+// ExpandEnv 展开 ${VAR}；未设置时保留原串（
 // 这里选择宽松处理，避免读一个示例配置就 panic）。
 func ExpandEnv(s string) string {
 	return reEnv.ReplaceAllStringFunc(s, func(m string) string {

@@ -1,0 +1,27 @@
+# 版本控制
+.git
+
+# 本地 Go 工具链缓存（体积巨大，绝不能进构建上下文）
+.gocache
+.gomodcache
+.gopath
+
+# 前端本地依赖与构建缓存
+**/node_modules
+**/*.tsbuildinfo
+
+# 敏感运行数据（账号库 / 卡密库 / 测试数据）
+mccms-go/accounts.json
+mccms-go/vip.json
+mccms-go/devdata
+
+# 本地脚本（含爱发电 token 明文）与临时文件
+start-server.sh
+e2e_afdian_bind.py
+goenv.sh
+_scratch
+
+# 本地构建产物（前端产物由阶段 1 重新生成；二进制由阶段 2 重新编译）
+mccms-go/internal/web/dist
+mccmsd
+mccms-go/mccmsd

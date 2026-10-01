@@ -56,4 +56,4 @@ _scratch/
 # 根目录杂散二进制
 /mccmsd
 # 前端增量编译缓存
-mccms/web-frontend/tsconfig.tsbuildinfo
+web-frontend/tsconfig.tsbuildinfo

@@ -45,7 +45,7 @@ const (
 	tibiuPathRankLists     = "/index.php/api/rankdata/lists"
 )
 
-// 搜索接口不返回总数，按页大小估算下界；与 Python 版 PAGE_SIZE_SEARCH 一致。
+// 搜索接口不返回总数，按页大小估算下界。
 const tibiuSearchPageSize = 10
 
 // 榜单接口单次最多返回的条目数（上限由站点侧决定）。
@@ -101,7 +101,7 @@ func (t *TibiuClient) parseTibiuResp(resp *mc.Response, context map[string]any) 
 		return payload, nil
 	}
 
-	// 详情类接口未带 code 时按成功处理（与 Python 版 safe_int(..., 1) 的默认值一致）
+	// 详情类接口未带 code 时按成功处理（safe_int 默认值 1）
 	code := 1
 	if _, ok := payload["code"]; ok {
 		code = mc.Atoi(payload["code"])

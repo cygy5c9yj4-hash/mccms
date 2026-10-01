@@ -584,7 +584,7 @@ func (c *ManhwaClient) parseReaderPage(pageHTML, chapterID string) (*manhwaReade
 	}
 
 	// 内联 JS readPic(mid,cid,vip,cion)：漫画数字 id 与权限标记只有这里能拿到。
-	// 在原始 HTML 上做正则（等价于 Python 版），DOM 里 script 是文本节点，取值一样。
+	// 在原始 HTML 上做正则，DOM 里 script 是文本节点，取值一样。
 	if m := reManhwaReadPic.FindStringSubmatch(pageHTML); m != nil {
 		meta.ComicID = m[1]
 		meta.VIP = mc.Atoi(m[3])
@@ -745,7 +745,7 @@ type manhwaEnvelope struct {
 
 // manhwaParseEnvelope 校验 HTTP 结果并解析 Mccms JSON 信封。
 //
-// 返回码语义（与站点实测一致，也与 Python 版 parse_resp 对齐）：
+// 返回码语义（与站点实测一致）：
 //
 //	code=1            成功
 //	status=success    另一套列表信封（code 恒为 -1），以 status 为准
@@ -896,7 +896,7 @@ func manhwaSearchTotal(root *html.Node) int {
 // manhwaCategoryTotal 估算分类页总数。
 //
 // 站点分页控件只渲染页码、不给总数，这里按「最大页码 × 每页 30 条」估算，
-// 与 Python 版保持一致（宁可偏大，也不要截断列表）。
+// （宁可偏大，也不要截断列表）。
 func manhwaCategoryTotal(root *html.Node) int {
 	node := FirstByClass(root, "pagination")
 	if node == nil {

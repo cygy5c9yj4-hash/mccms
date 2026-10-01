@@ -15,11 +15,8 @@ import (
 	"github.com/mccms/mccms-go/internal/mc"
 )
 
-// 对拍测试：用 Python 版（mccms/）里预录的真实响应 fixture 验证 boylove.go 的解析结果。
-//
-// 这些 fixture 是当初对接站点时抓下来的真实响应，因此这里等价于
-// 「Go 实现与已验证的 Python 实现在同一份输入上给出相同结论」。
-// fixture 路径为仓库内的 mccms/tests/fixtures。
+// 对拍测试：用对接站点时预录的真实响应 fixture 验证 boylove.go 的解析结果。
+// fixture 存放在本目录 testdata/ 下，均为当初对接站点时抓下来的真实响应。
 
 type blRT func(*http.Request) (*http.Response, error)
 
@@ -27,7 +24,7 @@ func (f blRT) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
 
 func blLoad(t *testing.T, name string) string {
 	t.Helper()
-	b, err := os.ReadFile(filepath.Join("../../../mccms/tests/fixtures", name))
+	b, err := os.ReadFile(filepath.Join("testdata", name))
 	if err != nil {
 		t.Fatalf("读 fixture 失败: %v", err)
 	}

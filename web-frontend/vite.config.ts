@@ -5,7 +5,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   build: {
-    outDir: '../../mccms-go/internal/web/dist',
+    outDir: '../mccms-go/internal/web/dist',
     emptyOutDir: true,
     target: 'es2020',
     sourcemap: false,

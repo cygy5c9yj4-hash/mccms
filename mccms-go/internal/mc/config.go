@@ -1,6 +1,6 @@
 package mc
 
-// 站点 key（与 Python 版保持一致）。
+// 站点 key（历史约定）。
 const (
 	SiteTibiu   = "tibiu"
 	SiteManhwa  = "manhwa" // 已下线：不再出现在 AllSites / SiteNames / SiteDomains 中

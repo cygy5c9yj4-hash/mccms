@@ -178,8 +178,8 @@ go vet ./...
 - `internal/decode`：还原算法的自逆性、余数条带映射、超高图跳过等。
 - `internal/mc`：id 解析、dir_rule DSL（含 `{Chindex:03}` 零填充、含下划线字段必须用 `/` 分隔）、
   权限错误映射。
-- `internal/client`：**对拍测试**——用 Python 版（`mccms/tests/fixtures`）预录的真实响应，
-  验证 Go 客户端的解析结论一致。
+- `internal/client`：**对拍测试**——用对接站点时预录的真实响应 fixture（`testdata/` 下），
+  验证解析结论。
 - `internal/web`：信封语义、权限错误映射到 1014、SPA 深链接回退、目录穿越拦截、
   `Content-Type` 魔数嗅探、图片代理的 SSRF 防护。
 - `internal/client/ehentai_fixture_test.go`：用真实抓取的搜索页 + 元信息响应，
@@ -216,8 +216,3 @@ MCCMS_LIVE=1 go test ./internal/client/ -run Live -v
 
 ---
 
-## 与 Python 版的关系
-
-仓库里的 `mccms/` 是同一套能力的 Python 实现，带 205 个单元测试与完整的接口逆向文档，
-目前作为**参考实现与对拍基线**保留（Go 客户端的对拍测试直接复用它的 fixture）。
-线上部署用这个 Go 单二进制。

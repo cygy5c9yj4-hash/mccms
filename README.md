@@ -14,22 +14,18 @@
 | 香香腐宅 | `boylove.cc`，网页端 JSON API |
 | E-Hentai | `e-hentai.org`，**只收录 yaoi** |
 
-> 仓库里还有一套 Python 实现（`mccms/`），带 205 个单元测试与完整的接口逆向文档，
-> 目前作为**参考实现与对拍基线**保留——Go 客户端的对拍测试直接复用它抓下来的 fixture。
-> 线上部署用 Go 那套。
-
 ---
 
 ## 快速开始
 
 ```bash
 # 1) 构建前端（产物会输出到 mccms-go/internal/web/dist，由 go:embed 打进二进制）
-cd mccms/web-frontend
+cd web-frontend
 npm install
 npm run build
 
 # 2) 构建并启动后端
-cd ../../mccms-go
+cd ../mccms-go
 go build -o mccmsd ./cmd/mccmsd
 ./mccmsd                      # http://127.0.0.1:8765
 ```
@@ -61,12 +57,9 @@ go build -o mccmsd ./cmd/mccmsd
 │       ├── download/        下载编排 + 后台任务
 │       └── web/             HTTP API + go:embed 前端
 │
-└── mccms/                   Python 参考实现
-    ├── src/mccms/           库本体
-    ├── tests/               205 个单元测试 + 抓取下来的 fixture
-    ├── web-frontend/        React 前端（JM-Aura 改造版）
-    ├── recon/               接口逆向资料与样本
-    └── docs/                接口逆向文档
+├── web-frontend/            React 前端（JM-Aura 改造版）
+├── Dockerfile               多阶段构建（前端 → 单二进制）
+└── start-server.sh          部署脚本（本机专用，未入库）
 ```
 
 ---
@@ -100,12 +93,9 @@ E-Hentai 源**只收录 yaoi**，并硬性排除涉及未成年人的标签
 
 ```bash
 cd mccms-go
-go test ./...                              # 51 个离线用例
+go test ./...                              # 离线用例（含对拍测试）
 
 MCCMS_LIVE=1 go test ./internal/client/ -run Live -v   # 实网用例（默认跳过）
-
-cd ../mccms
-PYTHONPATH=src python3 -m unittest discover -s tests -p 'test_*.py'   # 205 个用例
 ```
 
 ---
