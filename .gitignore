@@ -50,6 +50,8 @@ mccms-go/vip.json
 mccms-go/devdata/
 # 部署脚本（内含爱发电 token）
 start-server.sh
+# Docker Compose 环境变量文件（含爱发电 token），模板 .env.example 保留
+.env
 # 本机测试 / 临时文件
 e2e_afdian_bind.py
 _scratch/

@@ -1,0 +1,30 @@
+services:
+  mccms:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mccms:latest
+    container_name: mccms
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    environment:
+      TZ: Asia/Shanghai
+      # 卡密/订单库（与账号库、下载目录统一挂到 /data 卷）
+      MCCMS_VIP_STORE: /data/vip.json
+      # 爱发电 OpenAPI 凭据（主动对账用；留空则仅靠 webhook 收单）
+      MCCMS_AFDIAN_USER_ID: ${MCCMS_AFDIAN_USER_ID:-}
+      MCCMS_AFDIAN_TOKEN: ${MCCMS_AFDIAN_TOKEN:-}
+      # 每个「月」折算天数，默认 31
+      MCCMS_AFDIAN_DAYS_PER_MONTH: ${MCCMS_AFDIAN_DAYS_PER_MONTH:-31}
+    volumes:
+      - mccms_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8765/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  mccms_data:
