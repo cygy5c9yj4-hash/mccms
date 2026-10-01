@@ -5,6 +5,7 @@ import Alert from '@mui/material/Alert'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Card from '@mui/material/Card'
+import Chip from '@mui/material/Chip'
 import CardActionArea from '@mui/material/CardActionArea'
 import CardMedia from '@mui/material/CardMedia'
 import CircularProgress from '@mui/material/CircularProgress'
@@ -111,7 +112,7 @@ export function SectionTitle({ children, action }: { children: ReactNode; action
   )
 }
 
-export function ComicCard({ comic }: { comic: ComicSummary }) {
+export function ComicCard({ comic, showSource }: { comic: ComicSummary; showSource?: boolean }) {
   return (
     <Card sx={{ height: '100%', transition: 'transform .18s ease, box-shadow .18s ease', '&:hover': { transform: 'translateY(-3px)', boxShadow: 8 } }}>
       <CardActionArea
@@ -127,6 +128,23 @@ export function ComicCard({ comic }: { comic: ComicSummary }) {
             bgcolor: 'action.hover',
           }}
         >
+          {showSource && comic.source_label ? (
+            <Chip
+              size="small"
+              label={comic.source_label}
+              sx={{
+                position: 'absolute',
+                top: 4,
+                left: 4,
+                zIndex: 2,
+                height: 20,
+                fontSize: 11,
+                bgcolor: 'rgba(0,0,0,.62)',
+                color: '#fff',
+                '& .MuiChip-label': { px: 1 },
+              }}
+            />
+          ) : null}
           {comic.cover_url ? (
             <CardMedia
               component="img"
@@ -172,11 +190,11 @@ export function ComicCard({ comic }: { comic: ComicSummary }) {
 
 const GRID_COLUMNS = { xs: 'repeat(2, 1fr)', sm: 'repeat(3, 1fr)', md: 'repeat(4, 1fr)', lg: 'repeat(6, 1fr)' }
 
-export function ComicGrid({ items }: { items: ComicSummary[] }) {
+export function ComicGrid({ items, showSource }: { items: ComicSummary[]; showSource?: boolean }) {
   return (
     <Box sx={{ display: 'grid', gridTemplateColumns: GRID_COLUMNS, gap: 2 }}>
       {items.map((c) => (
-        <ComicCard key={`${c.source}-${c.comic_id}`} comic={c} />
+        <ComicCard key={`${c.source}-${c.comic_id}`} comic={c} showSource={showSource} />
       ))}
     </Box>
   )

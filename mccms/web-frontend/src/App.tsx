@@ -18,17 +18,20 @@ import Menu from '@mui/material/Menu'
 import MenuItem from '@mui/material/MenuItem'
 import Paper from '@mui/material/Paper'
 import Stack from '@mui/material/Stack'
-import TextField from '@mui/material/TextField'
 import Toolbar from '@mui/material/Toolbar'
 import Tooltip from '@mui/material/Tooltip'
 import Typography from '@mui/material/Typography'
 import useMediaQuery from '@mui/material/useMediaQuery'
-import { useTheme } from '@mui/material/styles'
+import { alpha, useTheme } from '@mui/material/styles'
 import DarkModeIcon from '@mui/icons-material/DarkMode'
 import DownloadIcon from '@mui/icons-material/Download'
 import ExploreIcon from '@mui/icons-material/Explore'
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings'
+import FavoriteIcon from '@mui/icons-material/Favorite'
+import HistoryIcon from '@mui/icons-material/History'
 import HomeIcon from '@mui/icons-material/Home'
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined'
+import CardMembershipIcon from '@mui/icons-material/CardMembership'
 import LightModeIcon from '@mui/icons-material/LightMode'
 import LogoutIcon from '@mui/icons-material/Logout'
 import LoginIcon from '@mui/icons-material/Login'
@@ -39,12 +42,12 @@ import SettingsIcon from '@mui/icons-material/Settings'
 import ShuffleIcon from '@mui/icons-material/Shuffle'
 import StarIcon from '@mui/icons-material/Star'
 import SwipeVerticalIcon from '@mui/icons-material/SwipeVertical'
-import VolunteerActivismIcon from '@mui/icons-material/VolunteerActivism'
+import WorkspacePremiumIcon from '@mui/icons-material/WorkspacePremium'
 import WhatshotIcon from '@mui/icons-material/Whatshot'
 import { useAuth } from './auth'
-import { useSite } from './site'
 import { useThemeMode } from './mode'
-import { AFDIAN_URL, BRAND_GRADIENT } from './theme'
+import { useSiteConfig } from './siteConfig'
+import { BRAND_GRADIENT, VIP_ACCENT } from './theme'
 import { CenterLoading } from './components'
 import Announcement from './components/Announcement'
 
@@ -66,6 +69,8 @@ const NovelList = lazy(() => import('./pages/NovelList'))
 const NovelDetail = lazy(() => import('./pages/NovelDetail'))
 const NovelReader = lazy(() => import('./pages/NovelReader'))
 const About = lazy(() => import('./pages/About'))
+const Admin = lazy(() => import('./pages/Admin'))
+const Vip = lazy(() => import('./pages/Vip'))
 
 // Material Design 3 自适应导航：
 // compact(<md) 底部 Navigation Bar / medium(md–lg) Navigation Rail /
@@ -78,6 +83,8 @@ interface NavItem {
   to: string
   label: string
   icon: ReactNode
+  /** 会员入口用「玫瑰金」描边 + 淡填充突出显示，与其它导航区分开 */
+  highlight?: boolean
 }
 
 // 导航只保留本后端真正支持的能力（小说 / 阅读笔记 / 收藏夹 / 阅读历史依赖上游
@@ -92,6 +99,9 @@ const NAV_BROWSE: NavItem[] = [
 ]
 
 const NAV_MINE: NavItem[] = [
+  { to: '/favorites', label: '收藏', icon: <FavoriteIcon /> },
+  { to: '/history', label: '历史', icon: <HistoryIcon /> },
+  { to: '/vip', label: '会员', icon: <CardMembershipIcon />, highlight: true },
   { to: '/downloads', label: '下载管理', icon: <DownloadIcon /> },
   { to: '/settings', label: '设置', icon: <SettingsIcon /> },
   { to: '/about', label: '关于', icon: <InfoOutlinedIcon /> },
@@ -105,6 +115,8 @@ function isActive(to: string, pathname: string): boolean {
 }
 
 function Logo() {
+  const { name } = useSiteConfig()
+
   return (
     <Typography
       variant="h6"
@@ -125,8 +137,7 @@ function Logo() {
         },
       }}
     >
-      <span>mc</span>
-      <span>cms</span>
+      <span>{name}</span>
     </Typography>
   )
 }
@@ -217,9 +228,61 @@ function NavListItems({ items, onNavigate }: { items: NavItem[]; onNavigate?: ()
           end={item.to === '/'}
           onClick={onNavigate}
           selected={isActive(item.to, location.pathname)}
+          sx={
+            item.highlight
+              ? {
+                  mx: 1.5,
+                  my: 0.75,
+                  borderRadius: 999,
+                  color: 'primary.main',
+                  background: (t) =>
+                    alpha(t.palette.primary.main, t.palette.mode === 'dark' ? 0.12 : 0.07),
+                  border: '1px solid',
+                  borderColor: (t) =>
+                    alpha(VIP_ACCENT, t.palette.mode === 'dark' ? 0.36 : 0.44),
+                  '& .MuiListItemIcon-root': { color: VIP_ACCENT },
+                  '&:hover': {
+                    background: (t) =>
+                      alpha(t.palette.primary.main, t.palette.mode === 'dark' ? 0.18 : 0.12),
+                  },
+                  '&.Mui-selected': {
+                    background: (t) =>
+                      alpha(t.palette.primary.main, t.palette.mode === 'dark' ? 0.22 : 0.14),
+                    color: 'primary.main',
+                  },
+                  '&.Mui-selected:hover': {
+                    background: (t) =>
+                      alpha(t.palette.primary.main, t.palette.mode === 'dark' ? 0.26 : 0.18),
+                  },
+                }
+              : undefined
+          }
         >
           <ListItemIcon>{item.icon}</ListItemIcon>
-          <ListItemText primary={item.label} primaryTypographyProps={{ fontSize: 14.5 }} />
+          <ListItemText
+            primary={item.label}
+            primaryTypographyProps={{ fontSize: 14.5, fontWeight: item.highlight ? 700 : 400 }}
+          />
+          {item.highlight && (
+            <Box
+              component="span"
+              sx={{
+                ml: 1,
+                px: 0.85,
+                py: 0.1,
+                borderRadius: 999,
+                fontSize: 10,
+                fontWeight: 800,
+                letterSpacing: '0.08em',
+                lineHeight: 1.6,
+                color: VIP_ACCENT,
+                border: '1px solid',
+                borderColor: alpha(VIP_ACCENT, 0.5),
+              }}
+            >
+              VIP
+            </Box>
+          )}
         </ListItemButton>
       ))}
     </List>
@@ -316,30 +379,9 @@ function BottomBar({ onMore }: { onMore: () => void }) {
   )
 }
 
-/** 顶栏站点切换：本后端支持多个站点，切换后整页刷新。 */
-function SiteSwitcher() {
-  const { site, sites, setSite } = useSite()
-  if (sites.length <= 1) return null
-  return (
-    <TextField
-      select
-      size="small"
-      value={site}
-      onChange={(e) => setSite(e.target.value)}
-      sx={{ minWidth: 118, '& .MuiInputBase-root': { fontSize: 13 } }}
-      variant="outlined"
-    >
-      {sites.map((s) => (
-        <MenuItem key={s.key} value={s.key}>
-          {s.name}
-        </MenuItem>
-      ))}
-    </TextField>
-  )
-}
-
 function UserArea() {
   const { user, loading, logout } = useAuth()
+  const navigate = useNavigate()
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null)
 
   if (loading) {
@@ -368,6 +410,19 @@ function UserArea() {
         />
       </Tooltip>
       <Menu anchorEl={anchorEl} open={!!anchorEl} onClose={() => setAnchorEl(null)}>
+        {user.is_admin && (
+          <MenuItem
+            onClick={() => {
+              setAnchorEl(null)
+              navigate('/admin')
+            }}
+          >
+            <ListItemIcon>
+              <AdminPanelSettingsIcon fontSize="small" />
+            </ListItemIcon>
+            管理后台
+          </MenuItem>
+        )}
         <MenuItem
           onClick={() => {
             setAnchorEl(null)
@@ -385,6 +440,7 @@ function UserArea() {
 }
 
 export default function App() {
+  const { name } = useSiteConfig()
   const theme = useTheme()
   const isRail = useMediaQuery(theme.breakpoints.up('md'))
   const isExpanded = useMediaQuery(theme.breakpoints.up('lg'))
@@ -406,28 +462,35 @@ export default function App() {
           <Toolbar sx={{ gap: 1 }}>
             <Logo />
             <Box sx={{ flexGrow: 1 }} />
-            <Tooltip title="如果觉得好用的话，可以捐助支持作者喵呜？谢谢喵！">
+            <Tooltip title="开通会员，畅读全部内容">
               <Button
                 size="small"
-                color="inherit"
-                href={AFDIAN_URL}
-                target="_blank"
-                rel="noreferrer"
-                aria-label="捐助支持作者"
+                component={NavLink}
+                to="/vip"
+                aria-label="成为会员"
+                startIcon={<WorkspacePremiumIcon sx={{ fontSize: 18, color: VIP_ACCENT }} />}
                 sx={{
                   flexShrink: 0,
                   minWidth: 0,
-                  px: { xs: 1, sm: 1.5 },
-                  gap: 0.5,
+                  px: { xs: 1, sm: 1.75 },
                   borderRadius: 999,
                   fontWeight: 700,
                   fontSize: 13,
                   whiteSpace: 'nowrap',
+                  color: 'primary.main',
+                  background: (t) =>
+                    alpha(t.palette.primary.main, t.palette.mode === 'dark' ? 0.12 : 0.07),
+                  border: '1px solid',
+                  borderColor: (t) =>
+                    alpha(VIP_ACCENT, t.palette.mode === 'dark' ? 0.34 : 0.42),
+                  '&:hover': {
+                    background: (t) =>
+                      alpha(t.palette.primary.main, t.palette.mode === 'dark' ? 0.18 : 0.12),
+                  },
                 }}
               >
-                <VolunteerActivismIcon sx={{ fontSize: 18 }} />
                 <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>
-                  捐助喵
+                  成为会员
                 </Box>
               </Button>
             </Tooltip>
@@ -436,7 +499,6 @@ export default function App() {
                 {mode === 'dark' ? <LightModeIcon /> : <DarkModeIcon />}
               </IconButton>
             </Tooltip>
-            <SiteSwitcher />
           <UserArea />
           </Toolbar>
         </AppBar>
@@ -511,9 +573,11 @@ export default function App() {
             <Route path="/novel_reader/:chapterId" element={<NovelReader />} />
             <Route path="/favorites" element={<Favorites />} />
             <Route path="/history" element={<AuraHistory />} />
+            <Route path="/vip" element={<Vip />} />
             <Route path="/downloads" element={<Downloads />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/about" element={<About />} />
+            <Route path="/admin" element={<Admin />} />
             <Route path="/login" element={<Login />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
@@ -538,7 +602,7 @@ export default function App() {
                 '&:hover': { color: 'primary.main' },
               }}
             >
-              关于 mccms
+              关于 {name}
             </Typography>
           </Box>
         )}

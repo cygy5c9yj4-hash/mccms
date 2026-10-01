@@ -21,7 +21,7 @@ interface SiteCtx {
 }
 
 const STORAGE_KEY = 'mccms.site'
-const DEFAULT_SITE = 'tibiu'
+const DEFAULT_SITE = 's1'
 
 const SiteContext = createContext<SiteCtx>({
   site: DEFAULT_SITE,

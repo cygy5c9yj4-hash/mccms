@@ -1,10 +1,10 @@
-// 阅读历史：GET /api/aura/library/history?limit=N
-// 记录形状：{album_id, album_title, photo_id, title, page_index, timestamp, type, scroll_pct}
-// 笔记已整合到「阅读笔记」页（发布后直接进入社区列表）。
+// 阅读历史：本地账号历史（/api/me/history）。替代原 JM-Aura 云端 library。
+import { useState } from 'react'
 import { Link as RouterLink } from 'react-router-dom'
 import Box from '@mui/material/Box'
 import Button from '@mui/material/Button'
 import Divider from '@mui/material/Divider'
+import IconButton from '@mui/material/IconButton'
 import List from '@mui/material/List'
 import ListItem from '@mui/material/ListItem'
 import ListItemAvatar from '@mui/material/ListItemAvatar'
@@ -13,39 +13,26 @@ import ListItemText from '@mui/material/ListItemText'
 import Stack from '@mui/material/Stack'
 import HistoryIcon from '@mui/icons-material/History'
 import MenuBookIcon from '@mui/icons-material/MenuBook'
-import PlayArrowIcon from '@mui/icons-material/PlayArrow'
-import { api } from '../api'
-import { CenterLoading, EmptyState, ErrorState, SectionTitle, useAsync } from '../components'
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline'
+import { account } from '../account'
+import { CenterLoading, EmptyState, SectionTitle, useAsync } from '../components'
 import { useAuth } from '../auth'
 
-interface HistoryItem {
-  album_id: string
-  album_title: string
-  photo_id: string
-  title: string
-  page_index: number
-  timestamp: number
-  type?: string
-  scroll_pct?: number
-}
-
-function formatTime(ms: number): string {
-  if (!ms) return '—'
-  return new Date(ms).toLocaleString()
-}
-
 export default function AuraHistory() {
-  const { user } = useAuth()
-  const history = useAsync<HistoryItem[]>(async () => {
-    const d = await api.get<unknown>(`/api/aura/library/history${api.qs({ limit: 200 })}`)
-    return Array.isArray(d) ? (d as HistoryItem[]) : []
-  }, [])
+  const { user, loading } = useAuth()
+  const [tick, setTick] = useState(0)
+  const state = useAsync(
+    async () => (user ? (await account.listHistory()).list : []),
+    [user?.username, tick],
+  )
+  const reload = () => setTick((t) => t + 1)
 
-  if (!user)
+  if (loading) return <CenterLoading />
+  if (!user) {
     return (
       <EmptyState
         icon={<HistoryIcon />}
-        text="登录 JM 账号后可同步阅读历史"
+        text="登录后查看阅读历史"
         action={
           <Button component={RouterLink} to="/login" variant="contained">
             去登录
@@ -53,63 +40,75 @@ export default function AuraHistory() {
         }
       />
     )
-  if (history.loading) return <CenterLoading />
-  if (history.error)
-    return <ErrorState message={`阅读历史加载失败：${history.error}`} onRetry={history.reload} />
-
-  const items = history.data ?? []
-
+  }
+  const items = state.data ?? []
   return (
-    <Stack spacing={1}>
-      <SectionTitle>
-        <HistoryIcon sx={{ color: 'primary.main' }} /> 阅读历史
-      </SectionTitle>
-      {items.length === 0 ? (
-        <EmptyState icon={<HistoryIcon />} text="还没有阅读记录，去挑一本吧" />
+    <Box>
+      <SectionTitle>阅读历史</SectionTitle>
+      {state.loading ? (
+        <CenterLoading />
+      ) : items.length === 0 ? (
+        <EmptyState icon={<HistoryIcon />} text="还没有阅读记录" />
       ) : (
-        <List sx={{ bgcolor: 'background.paper', borderRadius: 3, overflow: 'hidden' }}>
-          {items.map((it, i) => {
-            const isNovel = it.type === 'novel'
-            const label = it.title || it.album_title || `作品 ${it.album_id}`
-            const target = isNovel
-              ? `/novel_reader/${encodeURIComponent(it.photo_id || it.album_id)}?nid=${encodeURIComponent(it.album_id)}${it.scroll_pct && it.scroll_pct > 0 ? `&scroll=${it.scroll_pct.toFixed(4)}` : ''}`
-              : `/reader/${encodeURIComponent(it.photo_id || it.album_id)}${it.page_index > 0 ? `?page=${it.page_index}` : ''}`
-            const progressLabel = isNovel
-              ? it.scroll_pct && it.scroll_pct > 0
-                ? `${Math.round(it.scroll_pct * 100)}%`
-                : '开头'
-              : `第 ${(it.page_index ?? 0) + 1} 页`
-            return (
-              <Box key={it.album_id}>
-                {i > 0 && <Divider variant="inset" component="li" />}
+        <>
+          <Stack direction="row" justifyContent="flex-end" sx={{ mb: 1 }}>
+            <Button
+              size="small"
+              color="error"
+              startIcon={<DeleteOutlineIcon />}
+              onClick={() => void account.clearHistory().then(reload)}
+            >
+              清空历史
+            </Button>
+          </Stack>
+          <List>
+            {items.map((h) => (
+              <Box key={`${h.source}:${h.comic_id}`}>
                 <ListItem
                   secondaryAction={
-                    <Button size="small" variant="contained" startIcon={<PlayArrowIcon />} component={RouterLink} to={target}>
-                      继续
-                    </Button>
+                    <IconButton
+                      edge="end"
+                      aria-label="删除记录"
+                      onClick={() => void account.removeHistory(h.source, h.comic_id).then(reload)}
+                    >
+                      <DeleteOutlineIcon />
+                    </IconButton>
                   }
                 >
                   <ListItemAvatar>
-                    <Avatar sx={{ bgcolor: isNovel ? 'secondary.main' : 'primary.main', fontSize: 14 }}>
-                      {isNovel ? <MenuBookIcon /> : it.page_index > 0 ? `${it.page_index + 1}` : '1'}
+                    <Avatar variant="rounded" src={h.cover_url} sx={{ width: 56, height: 74 }}>
+                      <MenuBookIcon />
                     </Avatar>
                   </ListItemAvatar>
                   <ListItemText
-                    primary={label}
+                    primary={
+                      <Box
+                        component={RouterLink}
+                        to={`/comic/${encodeURIComponent(h.comic_id)}?site=${encodeURIComponent(h.source)}`}
+                        sx={{ color: 'inherit', textDecoration: 'none', fontWeight: 600 }}
+                      >
+                        {h.title}
+                      </Box>
+                    }
                     secondary={
                       <>
-                        {it.album_title && it.title && it.album_title !== it.title ? `${it.album_title} · ` : ''}
-                        {progressLabel} · {formatTime(it.timestamp)}
+                        {h.chapter_title || h.chapter_id}
+                        {h.page > 0 ? ` · 已读到第 ${h.page + 1} 页` : ''}
+                        <br />
+                        <Box component="span" sx={{ color: 'text.disabled' }}>
+                          {h.source}
+                          {h.updated_at ? ` · ${h.updated_at}` : ''}
+                        </Box>
                       </>
                     }
-                    primaryTypographyProps={{ fontWeight: 600, noWrap: true }}
                   />
                 </ListItem>
+                <Divider variant="inset" component="li" />
               </Box>
-            )
-          })}
-        </List>
+            ))}
+          </List>
+        </>
       )}
-    </Stack>
+    </Box>
   )
 }

@@ -13,7 +13,26 @@ import type { Theme } from '@mui/material/styles'
 
 export type ThemeMode = 'dark' | 'light'
 
-export const BRAND_GRADIENT = 'linear-gradient(135deg, #FFB1C8 0%, #C2436F 50%, #7D2948 100%)'
+/**
+ * 会员视觉令牌（玫瑰金）。
+ *
+ * 旧版 135° 三段渐变 (#FFB1C8 → #C2436F → #7D2948) 色域过宽，暗端在大面积填充时
+ * 会发浑（偏暗褐），白字对比度也不足——这正是「渐变色很丑」的根因。
+ * 新做法是「收窄渐变 + 金色点睛」，并把饱和渐变限制在小面积元素上：
+ *  - VIP_GRADIENT   干净的玫红渐变，仅用于按钮 / 徽标 / 进度条等小面积
+ *  - VIP_ACCENT     暖金点睛色，仅用于描边 / 图标 / 文字，不做大面积填充
+ *  - VIP_SHEEN_*    低透明度渐变光晕，用于会员卡面（深浅模式各一档）
+ */
+export const VIP_GRADIENT = 'linear-gradient(120deg, #FF9DBE 0%, #EE5A8C 52%, #D23A6E 100%)'
+export const VIP_ACCENT = '#E9B65E'
+export const VIP_ACCENT_SOFT = '#F3D9A4'
+export const VIP_SHEEN_DARK =
+  'linear-gradient(135deg, rgba(255,157,190,0.16) 0%, rgba(238,90,140,0.09) 46%, rgba(233,182,94,0.10) 100%)'
+export const VIP_SHEEN_LIGHT =
+  'linear-gradient(135deg, rgba(238,90,140,0.10) 0%, rgba(210,58,110,0.06) 46%, rgba(201,127,60,0.12) 100%)'
+
+/** 兼容旧引用：品牌渐变统一收敛到会员渐变 */
+export const BRAND_GRADIENT = VIP_GRADIENT
 
 /** 爱发电捐助入口：关于页与顶栏共用，避免重复硬编码 */
 export const AFDIAN_URL = 'https://afdian.com/a/torres'

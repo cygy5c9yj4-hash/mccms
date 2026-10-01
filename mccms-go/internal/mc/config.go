@@ -3,28 +3,31 @@ package mc
 // 站点 key（与 Python 版保持一致）。
 const (
 	SiteTibiu   = "tibiu"
-	SiteManhwa  = "manhwa"
+	SiteManhwa  = "manhwa" // 已下线：不再出现在 AllSites / SiteNames / SiteDomains 中
 	SiteBoylove = "boylove"
 	SiteEhentai = "ehentai"
+	SiteNhentai = "nhentai"
 )
 
-// AllSites 全部站点。
-var AllSites = []string{SiteTibiu, SiteManhwa, SiteBoylove, SiteEhentai}
+// AllSites 全部对外可见的站点（顺序即前端展示顺序）。
+var AllSites = []string{SiteTibiu, SiteNhentai, SiteBoylove, SiteEhentai}
 
 // SiteNames 站点展示名。
 var SiteNames = map[string]string{
 	SiteTibiu:   "TIBIU",
-	SiteManhwa:  "漫蛙",
+	SiteNhentai: "NHentai",
 	SiteBoylove: "香香腐宅",
 	SiteEhentai: "E-Hentai",
+	SiteManhwa:  "漫蛙",
 }
 
 // SiteDomains 站点默认域名（可被 option 覆盖，也支持追加镜像）。
 var SiteDomains = map[string][]string{
 	SiteTibiu:   {"cache.tibiu.net"},
-	SiteManhwa:  {"www.manhwa.wang"},
+	SiteNhentai: {"nhentai.net"},
 	SiteBoylove: {"boylove.cc"},
 	SiteEhentai: {"e-hentai.org"},
+	SiteManhwa:  {"www.manhwa.wang"},
 }
 
 // 运行时常量。

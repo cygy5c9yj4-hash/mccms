@@ -144,6 +144,8 @@ func New(opts Options) (Client, error) {
 		c = NewManhwa(base)
 	case mc.SiteBoylove:
 		c = NewBoylove(base)
+	case mc.SiteNhentai:
+		c = NewNhentai(base)
 	case mc.SiteEhentai:
 		c = NewEhentai(base)
 	}

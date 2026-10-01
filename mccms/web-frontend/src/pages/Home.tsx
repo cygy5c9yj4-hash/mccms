@@ -5,7 +5,6 @@ import Button from '@mui/material/Button'
 import Card from '@mui/material/Card'
 import Chip from '@mui/material/Chip'
 import InputAdornment from '@mui/material/InputAdornment'
-import MenuItem from '@mui/material/MenuItem'
 import Paper from '@mui/material/Paper'
 import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
@@ -14,15 +13,13 @@ import SearchIcon from '@mui/icons-material/Search'
 import SwipeVerticalIcon from '@mui/icons-material/SwipeVertical'
 import WhatshotIcon from '@mui/icons-material/Whatshot'
 import { api } from '../api'
-import { CenterLoading, ComicCard, ErrorState, SectionTitle, useAsync } from '../components'
+import { CenterLoading, ComicCard, ComicGrid, ErrorState, SectionTitle, useAsync } from '../components'
+import { useSiteConfig } from '../siteConfig'
 import type { ComicSummary } from '../types'
-import { useSite } from '../site'
 
 /**
- * 原始列表（/api/latest、/api/promote 的分区内容）→ ComicSummary。
- *
- * 后端返回的 image 都是绝对地址；若碰到相对路径，只补当前源，
- * 不再像上游那样拼 JM 的 CDN 域名（那对本项目是错误域名）。
+ * 原始列表（/api/latest 等 legacy 裸响应）→ ComicSummary。
+ * Latest 页仍在使用，务必保留此导出。
  */
 export function rawListToSummaries(data: unknown): ComicSummary[] {
   const list = Array.isArray(data) ? data : []
@@ -46,6 +43,7 @@ export function rawListToSummaries(data: unknown): ComicSummary[] {
 
     out.push({
       source: String(it.source ?? ''),
+      source_label: typeof it.source_label === 'string' ? it.source_label : undefined,
       comic_id: String(id),
       title: String(it.name ?? it.title ?? ''),
       author: Array.isArray(authorRaw)
@@ -65,30 +63,15 @@ export function novelListFromPromote(_data: unknown): never[] {
   return []
 }
 
-interface PromoteSection {
-  id?: number | string
-  title?: string
-  slug?: string
-  type?: string
-  content?: unknown[]
+interface HomeFeed {
+  free?: ComicSummary[]
+  premium?: ComicSummary[]
 }
 
-function normalizeSections(data: unknown): PromoteSection[] {
-  if (Array.isArray(data)) {
-    return data.filter((s) => s && typeof s === 'object') as PromoteSection[]
-  }
-  return []
-}
-
-async function loadPromote(): Promise<PromoteSection[]> {
-  const d = await api.get<unknown>('/api/promote')
-  return normalizeSections(d)
-}
-
-/** 首页顶部：站点切换 + 搜索 */
+/** 首页顶部：聚合搜索入口（不再暴露站点切换）。 */
 function Hero() {
   const navigate = useNavigate()
-  const { site, sites, current, setSite } = useSite()
+  const { name } = useSiteConfig()
   const [q, setQ] = useState('')
 
   const submit = () => {
@@ -115,13 +98,13 @@ function Hero() {
       }}
     >
       <Typography variant="overline" color="primary">
-        {current?.name ?? site} · {current?.domains?.[0] ?? ''}
+        {name}
       </Typography>
       <Typography variant="h4" sx={{ mt: 0.5, mb: 0.5 }}>
         今天想看点什么？
       </Typography>
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2.5 }}>
-        支持多个站点，切换后全站生效。搜索、榜单、分类、阅读与下载都走同一套后端。
+        精选内容已为你聚合好，直接搜索或浏览即可。
       </Typography>
 
       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -145,23 +128,6 @@ function Hero() {
         <Button variant="contained" onClick={submit} sx={{ height: 40 }}>
           搜索
         </Button>
-
-        {sites.length > 1 && (
-          <TextField
-            select
-            size="small"
-            label="站点"
-            value={site}
-            onChange={(e) => setSite(e.target.value)}
-            sx={{ minWidth: 150, bgcolor: 'background.paper', borderRadius: 1 }}
-          >
-            {sites.map((s) => (
-              <MenuItem key={s.key} value={s.key}>
-                {s.name}
-              </MenuItem>
-            ))}
-          </TextField>
-        )}
       </Box>
 
       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 2 }}>
@@ -227,38 +193,42 @@ function CoverRow({ items }: { items: ComicSummary[] }) {
 }
 
 export default function Home() {
-  const promote = useAsync(loadPromote, [])
+  const feed = useAsync(() => api.get<HomeFeed>('/api/home'), [])
 
-  const sections = useMemo(() => {
-    const raw = promote.data ?? []
-    return raw
-      .map((section, i) => ({
-        key: String(section.id ?? section.slug ?? i),
-        title: section.title || '推荐',
-        items: rawListToSummaries(section.content),
-      }))
-      .filter((s) => s.items.length > 0)
-  }, [promote.data])
+  const free = useMemo(() => feed.data?.free ?? [], [feed.data])
+  const premium = useMemo(() => feed.data?.premium ?? [], [feed.data])
 
   return (
     <Box>
       <Hero />
 
-      {promote.loading ? (
+      {feed.loading ? (
         <CenterLoading />
-      ) : promote.error ? (
-        <ErrorState message={`内容加载失败：${promote.error}`} onRetry={promote.reload} />
-      ) : sections.length === 0 ? (
-        <Card sx={{ p: 4, textAlign: 'center', borderRadius: 3 }}>
-          <Typography color="text.secondary">暂时没有拿到内容，稍后再试或换个站点看看。</Typography>
-        </Card>
+      ) : feed.error ? (
+        <ErrorState message={`内容加载失败：${feed.error}`} onRetry={feed.reload} />
       ) : (
-        sections.map((s) => (
-          <Box key={s.key} sx={{ mb: 3.5 }}>
-            <SectionTitle>{s.title}</SectionTitle>
-            <CoverRow items={s.items} />
+        <>
+          {free.length > 0 ? (
+            <Box sx={{ mb: 4 }}>
+              <SectionTitle>免费专区</SectionTitle>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                无需会员即可直接阅读
+              </Typography>
+              <CoverRow items={free} />
+            </Box>
+          ) : null}
+
+          <Box>
+            <SectionTitle>精选推荐</SectionTitle>
+            {premium.length === 0 ? (
+              <Card sx={{ p: 4, textAlign: 'center', borderRadius: 3 }}>
+                <Typography color="text.secondary">暂时没有拿到内容，稍后再试。</Typography>
+              </Card>
+            ) : (
+              <ComicGrid items={premium} />
+            )}
           </Box>
-        ))
+        </>
       )}
     </Box>
   )

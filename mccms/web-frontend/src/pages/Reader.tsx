@@ -23,6 +23,8 @@ import { api, ApiError, UNAUTHORIZED_EVENT } from '../api'
 import { FavoriteFolderDialog, useAsync } from '../components'
 import type { FavoriteFolder } from '../components'
 import { useAuth } from '../auth'
+import { account } from '../account'
+import { currentSiteKey } from '../site'
 import { useToast } from '../toast'
 import DscImage from '../components/DscImage'
 import { chapterImageUrl } from '../types'
@@ -226,15 +228,14 @@ export default function Reader() {
     setStart(s)
     setLimit(total > 0 ? Math.max(s + 1, end) : ini)
     if (user && albumId) {
-      void api
-        .post('/api/aura/library/history', {
-          album_id: albumId,
-          album_title: albumTitle,
-          photo_id: chapterId,
-          title: d.title ?? '',
-          page_index: resumePage,
-          type: 'comic',
-          timestamp: Date.now(),
+      void account
+        .recordHistory({
+          source: currentSiteKey(),
+          comic_id: albumId,
+          title: d.title ?? albumTitle,
+          chapter_id: chapterId,
+          chapter_title: d.title ?? '',
+          page: resumePage,
         })
         .catch(() => {})
     }
@@ -288,12 +289,13 @@ export default function Reader() {
       if (scrollRaf.current) cancelAnimationFrame(scrollRaf.current)
       scrollRaf.current = 0
       if (user && albumId) {
-        void api
-          .post('/api/aura/library/history', {
-            album_id: albumId,
-            photo_id: chapterId,
-            page_index: pageIdx.current,
-            type: 'comic',
+        void account
+          .recordHistory({
+            source: currentSiteKey(),
+            comic_id: albumId,
+            title: d?.title ?? '',
+            chapter_id: chapterId,
+            page: pageIdx.current,
           })
           .catch(() => {})
       }
@@ -317,14 +319,13 @@ export default function Reader() {
       }
       pageIdx.current = cur
       if (user && albumId) {
-        void api
-          .post('/api/aura/library/history', {
-            album_id: albumId,
-            album_title: albumTitle,
-            photo_id: chapterId,
-            title: d.title ?? '',
-            page_index: cur,
-            type: 'comic',
+        void account
+          .recordHistory({
+            source: currentSiteKey(),
+            comic_id: albumId,
+            title: d.title ?? albumTitle,
+            chapter_id: chapterId,
+            page: cur,
           })
           .catch(() => {})
       }

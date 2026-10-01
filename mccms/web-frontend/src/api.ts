@@ -11,9 +11,9 @@ export const UNAUTHORIZED_EVENT = 'aura:unauthorized'
 /** 当前站点（由 site.tsx 写入 localStorage）；后端是多站点的，所有请求都要带上。 */
 function currentSite(): string {
   try {
-    return localStorage.getItem('mccms.site') || 'tibiu'
+    return localStorage.getItem('mccms.site') || 's1'
   } catch {
-    return 'tibiu'
+    return 's1'
   }
 }
 
@@ -64,7 +64,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const st = typeof body.st === 'number' ? body.st : res.ok ? STATUS_OK : -1
   if (st === STATUS_NOT_LOGIN) {
     window.dispatchEvent(new Event(UNAUTHORIZED_EVENT))
-    throw new ApiError(STATUS_NOT_LOGIN, '请先登录 JM 账号', res.status)
+    throw new ApiError(STATUS_NOT_LOGIN, '请先登录本站账号', res.status)
   }
   if (st !== STATUS_OK) {
     throw new ApiError(st, body.msg || `请求失败（st=${st}）`, res.status)

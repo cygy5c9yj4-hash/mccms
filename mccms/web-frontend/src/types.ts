@@ -2,6 +2,8 @@
 
 export interface ComicSummary {
   source: string
+  /** 匿名来源显示名，如「来源1」；后端下发，避免用户看到真实站点。 */
+  source_label?: string
   comic_id: string
   title: string
   author?: string | null

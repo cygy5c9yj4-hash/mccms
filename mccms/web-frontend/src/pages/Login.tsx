@@ -1,158 +1,108 @@
-import { useState } from 'react'
-import type { FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
-import Alert from '@mui/material/Alert'
-import Box from '@mui/material/Box'
-import Button from '@mui/material/Button'
-import Card from '@mui/material/Card'
-import CardContent from '@mui/material/CardContent'
-import CircularProgress from '@mui/material/CircularProgress'
-import Divider from '@mui/material/Divider'
-import InputAdornment from '@mui/material/InputAdornment'
-import TextField from '@mui/material/TextField'
-import Typography from '@mui/material/Typography'
-import LockIcon from '@mui/icons-material/Lock'
-import LoginIcon from '@mui/icons-material/Login'
-import PersonIcon from '@mui/icons-material/Person'
-import { BRAND_GRADIENT, HEADING_FONT } from '../theme'
-import { api, ApiError } from '../api'
-import { useAuth } from '../auth'
+import { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import {
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Stack,
+  Tab,
+  Tabs,
+  TextField,
+  Typography,
+} from '@mui/material';
+import { useAuth } from '../auth';
 
 export default function Login() {
-  const navigate = useNavigate()
-  const { user, loading, refresh } = useAuth()
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState('')
+  const { login, register } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation() as { state?: { from?: string } };
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [password2, setPassword2] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault()
-    setError('')
+  const from = location.state?.from ?? '/';
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
     if (!username.trim() || !password) {
-      setError('请输入 JM 用户名和密码')
-      return
+      setError('请输入用户名和密码');
+      return;
     }
-    setBusy(true)
+    if (mode === 'register' && password !== password2) {
+      setError('两次输入的密码不一致');
+      return;
+    }
+    setBusy(true);
     try {
-      await api.post('/api/site/login', { username: username.trim(), password })
-      await refresh()
-      navigate('/', { replace: true })
+      if (mode === 'login') {
+        await login(username.trim(), password);
+      } else {
+        await register(username.trim(), password);
+      }
+      navigate(from, { replace: true });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : '登录失败，请重试')
+      setError(err instanceof Error ? err.message : '操作失败');
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
-
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
-        <CircularProgress />
-      </Box>
-    )
-  }
-  if (user) {
-    return (
-      <Box sx={{ textAlign: 'center', py: 8 }}>
-        <Typography>已登录为 {user.username}</Typography>
-        <Button sx={{ mt: 2 }} variant="contained" onClick={() => navigate('/')}>
-          返回首页
-        </Button>
-      </Box>
-    )
-  }
+  };
 
   return (
-    <Card
-      sx={{
-        maxWidth: 420,
-        mx: 'auto',
-        mt: { xs: 4, md: 8 },
-        borderRadius: 4,
-        overflow: 'hidden',
-      }}
-    >
-      <Box sx={{ height: 4, background: BRAND_GRADIENT }} />
-      <CardContent sx={{ p: { xs: 3, sm: 5 } }}>
-        <Box sx={{ textAlign: 'center', mb: 3 }}>
-          <Typography
-            variant="h5"
-            sx={{ fontFamily: HEADING_FONT, fontWeight: 600, letterSpacing: '0.02em' }}
-          >
-            禁漫天堂
+    <Box sx={{ maxWidth: 420, mx: 'auto', mt: { xs: 4, md: 8 }, px: 2 }}>
+      <Card>
+        <CardContent sx={{ p: { xs: 3, md: 4 } }}>
+          <Typography variant="h5" fontWeight={700} gutterBottom>
+            {mode === 'login' ? '登录' : '注册'}
           </Typography>
-          <Typography variant="body2" color="text.secondary" mt={0.5}>
-            使用 JM 官方账号登录，与官网同源同体验
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            本站账号与各漫画站点账号相互独立；首个注册用户自动成为管理员。
           </Typography>
-        </Box>
-
-        {error && (
-          <Alert severity="error" sx={{ mb: 2, borderRadius: 3 }}>
-            {error}
-          </Alert>
-        )}
-
-        <Box component="form" onSubmit={submit} noValidate>
-          <TextField
-            fullWidth
-            margin="normal"
-            label="用户名 / 邮箱"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            autoComplete="username"
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <PersonIcon fontSize="small" />
-                  </InputAdornment>
-                ),
-              },
-            }}
-          />
-          <TextField
-            fullWidth
-            margin="normal"
-            label="密码"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-            slotProps={{
-              input: {
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <LockIcon fontSize="small" />
-                  </InputAdornment>
-                ),
-              },
-            }}
-          />
-          <Button
-            fullWidth
-            size="large"
-            type="submit"
-            variant="contained"
-            disabled={busy}
-            startIcon={busy ? <CircularProgress size={18} color="inherit" /> : <LoginIcon />}
-            sx={{ mt: 2.5, borderRadius: 3 }}
-          >
-            登录
-          </Button>
-        </Box>
-
-        <Divider sx={{ my: 3 }}>
-          <Typography variant="caption" color="text.secondary">
-            没有账号？
-          </Typography>
-        </Divider>
-        <Typography variant="body2" color="text.secondary" textAlign="center" lineHeight={1.8}>
-          请前往 JM 官方网站注册；
-          <br />
-          登录后收藏、评论、历史与本站完全同步。
-        </Typography>
-      </CardContent>
-    </Card>
-  )
+          <Tabs value={mode} onChange={(_, v) => setMode(v)} sx={{ mb: 2 }}>
+            <Tab value="login" label="登录" />
+            <Tab value="register" label="注册" />
+          </Tabs>
+          <Box component="form" onSubmit={submit}>
+            <Stack spacing={2}>
+              {error && <Alert severity="error">{error}</Alert>}
+              <TextField
+                label="用户名"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                autoFocus
+                fullWidth
+                size="small"
+              />
+              <TextField
+                label="密码"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                fullWidth
+                size="small"
+              />
+              {mode === 'register' && (
+                <TextField
+                  label="确认密码"
+                  type="password"
+                  value={password2}
+                  onChange={(e) => setPassword2(e.target.value)}
+                  fullWidth
+                  size="small"
+                />
+              )}
+              <Button type="submit" variant="contained" disabled={busy} size="large">
+                {busy ? '请稍候…' : mode === 'login' ? '登录' : '注册'}
+              </Button>
+            </Stack>
+          </Box>
+        </CardContent>
+      </Card>
+    </Box>
+  );
 }

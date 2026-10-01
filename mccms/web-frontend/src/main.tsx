@@ -7,6 +7,7 @@ import App from './App'
 import { AuthProvider } from './auth'
 import { ThemeModeContext } from './mode'
 import { SiteProvider } from './site'
+import { SiteConfigProvider } from './siteConfig'
 import { buildTheme } from './theme'
 import type { ThemeMode } from './theme'
 
@@ -44,11 +45,13 @@ function Root() {
       <ThemeProvider theme={theme}>
         <CssBaseline />
         <BrowserRouter>
-          <SiteProvider>
+          <SiteConfigProvider>
+            <SiteProvider>
             <AuthProvider>
               <App />
             </AuthProvider>
-          </SiteProvider>
+            </SiteProvider>
+          </SiteConfigProvider>
         </BrowserRouter>
       </ThemeProvider>
     </ThemeModeContext.Provider>

@@ -41,7 +41,12 @@ func main() {
 		password    = flag.String("password", "", "站点密码（可选）")
 		imgThreads  = flag.Int("image-threads", 16, "图片并发数")
 		chThreads   = flag.Int("chapter-threads", 4, "章节并发数")
-		version     = flag.Bool("version", false, "打印版本后退出")
+
+		accountsPath = flag.String("accounts", "", "账号库路径（默认 <下载目录同级>/accounts.json）")
+		noAccounts   = flag.Bool("no-accounts", false, "关闭自有账号体系（收藏/历史/笔记/管理后台不可用）")
+		sessionDays  = flag.Int("session-days", 30, "登录会话有效期（天）")
+
+		version = flag.Bool("version", false, "打印版本后退出")
 	)
 	var resolves stringList
 	flag.Var(&resolves, "resolve", "host=ip 解析覆盖，可重复（等价 curl --resolve）")
@@ -63,7 +68,7 @@ func main() {
 		}
 	}
 
-	server := web.New(web.Config{
+	server, err := web.New(web.Config{
 		Addr:         *addr,
 		Site:         *site,
 		DownloadDir:  *downloadDir,
@@ -74,7 +79,15 @@ func main() {
 		Password:     *password,
 		ImageThreads: *imgThreads,
 		ChapterThr:   *chThreads,
+
+		AccountsPath:    *accountsPath,
+		DisableAccounts: *noAccounts,
+		SessionTTLDays:  *sessionDays,
 	})
+	if err != nil {
+		log.Fatalf("初始化服务失败: %v", err)
+	}
+	defer func() { _ = server.Close() }()
 
 	httpServer := &http.Server{
 		Addr:    *addr,

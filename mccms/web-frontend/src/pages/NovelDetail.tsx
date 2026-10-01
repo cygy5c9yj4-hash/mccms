@@ -33,7 +33,7 @@ import { useAuth } from '../auth'
 import { CenterLoading, EmptyState, ErrorState, FavoriteFolderDialog, SectionTitle, useAsync } from '../components'
 import type { FavoriteFolder } from '../components'
 import { RecommendDialog } from '../components/RecommendDialog'
-import { NOVEL_EXPORT_LS_KEY, STATUS_LABEL, addEntry, percentOf, statusColor } from '../downloadTasks'
+import { NOVEL_EXPORT_LS_KEY, STATUS_LABEL, addEntry, percentOf, statusColor, scopedKey } from '../downloadTasks'
 import { useToast } from '../toast'
 import type { NovelChapterSummary, NovelDetail as NovelDetailData, NovelExportTask, V2Comment } from '../types'
 
@@ -232,7 +232,10 @@ export default function NovelDetail() {
         format: dlFormat,
       })
       setDlTask(raw)
-      addEntry(NOVEL_EXPORT_LS_KEY, { task_id: raw.task_id, title: d.title || `#${novelId}` })
+      addEntry(scopedKey(NOVEL_EXPORT_LS_KEY, localStorage.getItem('aura.account.uid')), {
+        task_id: raw.task_id,
+        title: d.title || `#${novelId}`,
+      })
       toast('已发起下载，正在解码喵。。。', 'success', {
         label: '查看进度',
         onClick: () => navigate('/downloads'),

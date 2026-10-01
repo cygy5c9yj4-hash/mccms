@@ -72,9 +72,9 @@ export default function Search() {
       ) : (
         <>
           <Typography variant="body2" color="text.secondary" mb={2}>
-            「{q}」共 {state.data.length} 条结果
+            「{q}」共 {state.data.length} 条结果（已聚合多个来源）
           </Typography>
-          <ComicGrid items={state.data} />
+          <ComicGrid items={state.data} showSource />
           <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
             <Pagination
               count={100}

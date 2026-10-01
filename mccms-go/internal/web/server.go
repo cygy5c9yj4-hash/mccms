@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/mccms/mccms-go/internal/account"
 	"github.com/mccms/mccms-go/internal/client"
 	"github.com/mccms/mccms-go/internal/download"
 	"github.com/mccms/mccms-go/internal/mc"
@@ -37,6 +38,13 @@ type Config struct {
 	Password     string
 	ImageThreads int
 	ChapterThr   int
+
+	// AccountsPath 账号库（JSON）路径。为空则使用 DownloadDir 同级的 accounts.json。
+	AccountsPath string
+	// DisableAccounts 关闭自有账号体系（仅保留站点透传能力）。
+	DisableAccounts bool
+	// SessionTTLDays 会话有效期（天）。<=0 时用 account.DefaultSessionTTL。
+	SessionTTLDays int
 }
 
 // Server HTTP 服务。
@@ -44,14 +52,21 @@ type Server struct {
 	cfg     Config
 	manager *download.Manager
 
+	// accounts 自有账号体系；可为 nil（未启用时相关端点返回明确提示）。
+	accounts *account.Service
+
 	mu           sync.Mutex
 	clients      map[string]client.Client // site -> client
 	options      map[string]download.Options
 	chapterCache *chapterImageCache
 }
 
-// New 创建服务。
-func New(cfg Config) *Server {
+// New 创建服务，并初始化自有账号体系。
+//
+// 返回错误的情形只有一种：账号库无法打开（路径不可写、文件损坏等）。
+// 这类问题会让「收藏 / 历史 / 笔记 / 管理后台」全部不可用，因此不静默降级，
+// 而是让调用方决定如何处理（main 会据此终止启动）。
+func New(cfg Config) (*Server, error) {
 	if cfg.Site == "" {
 		cfg.Site = mc.SiteTibiu
 	}
@@ -65,14 +80,51 @@ func New(cfg Config) *Server {
 	if cfg.ChapterThr <= 0 {
 		cfg.ChapterThr = 4
 	}
-	return &Server{
+	if cfg.AccountsPath == "" {
+		cfg.AccountsPath = filepath.Join(filepath.Dir(cfg.DownloadDir), "accounts.json")
+	}
+
+	srv := &Server{
 		cfg:          cfg,
 		manager:      download.NewManager(),
 		clients:      map[string]client.Client{},
 		options:      map[string]download.Options{},
 		chapterCache: newChapterImageCache(),
 	}
+
+	if !cfg.DisableAccounts {
+		store, err := account.NewJSONStore(cfg.AccountsPath)
+		if err != nil {
+			return nil, err
+		}
+		svc, err := account.New(account.Options{
+			Store:      store,
+			SessionTTL: time.Duration(cfg.SessionTTLDays) * 24 * time.Hour,
+		})
+		if err != nil {
+			_ = store.Close()
+			return nil, err
+		}
+		if err := svc.Bootstrap(); err != nil {
+			_ = store.Close()
+			return nil, err
+		}
+		srv.accounts = svc
+	}
+
+	return srv, nil
 }
+
+// Close 释放服务持有的资源（主要是账号库落盘）。
+func (s *Server) Close() error {
+	if s.accounts == nil {
+		return nil
+	}
+	return s.accounts.Store().Close()
+}
+
+// Accounts 暴露账号服务，供测试与外部集成使用；未启用时为 nil。
+func (s *Server) Accounts() *account.Service { return s.accounts }
 
 // Manager 暴露任务管理器。
 func (s *Server) Manager() *download.Manager { return s.manager }
@@ -81,10 +133,46 @@ func (s *Server) Manager() *download.Manager { return s.manager }
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
+	// ---- 自有账号体系（收藏 / 历史 / 笔记 / 管理后台）----
+	mux.HandleFunc("/api/auth/register", s.handleAuthRegister)
+	mux.HandleFunc("/api/auth/login", s.handleAuthLogin)
+	mux.HandleFunc("/api/auth/logout", s.handleAuthLogout)
+	mux.HandleFunc("/api/auth/me", s.handleAuthMe)
+	mux.HandleFunc("/api/auth/password", s.handleAuthPassword)
+
+	mux.HandleFunc("/api/me/favorites", s.handleMeFavorites)
+	mux.HandleFunc("/api/me/favorite-check", s.handleMeFavoriteCheck)
+	mux.HandleFunc("/api/me/favorite-folders", s.handleMeFavoriteFolders)
+	mux.HandleFunc("/api/me/history", s.handleMeHistory)
+	mux.HandleFunc("/api/me/notes", s.handleMeNotes)
+	mux.HandleFunc("/api/me/afdian", s.handleMeAfdian)
+	mux.HandleFunc("/api/me/afdian/unbind", s.handleMeAfdianUnbind)
+
+	mux.HandleFunc("/api/admin/overview", s.handleAdminOverview)
+	mux.HandleFunc("/api/admin/users", s.handleAdminUsers)
+	mux.HandleFunc("/api/admin/users/", s.handleAdminUserAction)
+	mux.HandleFunc("/api/admin/audit", s.handleAdminAudit)
+	mux.HandleFunc("/api/admin/settings", s.handleAdminSettings)
+	mux.HandleFunc("/api/admin/vip/codes", s.handleAdminVipCodes)
+	mux.HandleFunc("/api/admin/vip/codes/", s.handleAdminVipCodeAction)
+	mux.HandleFunc("/api/admin/vip/orders", s.handleAdminVipOrders)
+	mux.HandleFunc("/api/admin/vip/orders/", s.handleAdminVipOrderAction)
+	mux.HandleFunc("/api/admin/vip/grant", s.handleAdminVipGrant)
+	mux.HandleFunc("/api/admin/vip/settings", s.handleAdminVipSettings)
+	mux.HandleFunc("/api/admin/vip/sync", s.handleAdminVipSync)
+	mux.HandleFunc("/api/admin/vip/ping", s.handleAdminVipPing)
+	mux.HandleFunc("/api/admin/site", s.handleAdminSite)
+	mux.HandleFunc("/api/admin/vip/free-comics/generate", s.handleAdminVipGenerateFree)
+
 	// ---- 站点信息（本库自有）----
 	mux.HandleFunc("/api/sites", s.handleSites)
+	mux.HandleFunc("/api/site", s.handlePublicSite)
 	mux.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, map[string]any{"ok": true, "sites": mc.AllSites})
+		anon := make([]string, 0, len(mc.AllSites))
+		for _, site := range mc.AllSites {
+			anon = append(anon, anonSourceKey(site))
+		}
+		writeJSON(w, 200, map[string]any{"ok": true, "sites": anon})
 	})
 
 	// ---- JM-Aura 兼容层 ----
@@ -92,11 +180,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/site/me", s.handleSiteMe)
 	mux.HandleFunc("/api/site/login", s.handleSiteLogin)
 	mux.HandleFunc("/api/site/logout", s.handleSiteLogout)
-	mux.HandleFunc("/api/announcement", s.handleAnnouncement)
+	mux.HandleFunc("/api/announcement", s.handlePublicAnnouncement)
+	mux.HandleFunc("/api/home", s.handleHome)
 	mux.HandleFunc("/api/promote", s.handlePromote)
 	mux.HandleFunc("/api/latest", s.handleLatest)
 	mux.HandleFunc("/api/random", s.handleRandom)
 	mux.HandleFunc("/api/afdian/sponsors", s.handleAfdian)
+	mux.HandleFunc("/api/vip/status", s.handleVipStatus)
+	mux.HandleFunc("/api/vip/redeem", s.handleVipRedeem)
+	mux.HandleFunc("/api/webhook/afdian", s.handleAfdianWebhook)
 
 	mux.HandleFunc("/api/image-proxy", s.handleImageProxy)
 	mux.HandleFunc("/api/chapter_image/", s.handleChapterImage)
@@ -105,8 +197,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/v2/jm/categories", s.handleCategories)
 	mux.HandleFunc("/api/v2/jm/leaderboard", s.handleLeaderboard)
 	mux.HandleFunc("/api/v2/jm/random", s.handleRandom)
-	mux.HandleFunc("/api/v2/jm/comic/", s.handleComicPath)
-	mux.HandleFunc("/api/v2/jm/chapter/", s.handleChapterPath)
+	mux.HandleFunc("/api/v2/jm/comic/", s.vipGate(s.handleComicPath))
+	mux.HandleFunc("/api/v2/jm/chapter/", s.vipGate(s.handleChapterPath))
 	mux.HandleFunc("/api/v2/jm/download/tasks", s.handleDownloadTasks)
 	mux.HandleFunc("/api/v2/jm/download/tasks/", s.handleDownloadTaskByID)
 
@@ -127,7 +219,7 @@ func (s *Server) Handler() http.Handler {
 	// ---- 前端静态资源（SPA）----
 	mux.HandleFunc("/", s.handleStatic)
 
-	return logMiddleware(mux)
+	return logMiddleware(adminNoStore(mux))
 }
 
 // ---- 客户端缓存 -------------------------------------------------------------
@@ -136,6 +228,10 @@ func (s *Server) siteOf(r *http.Request) string {
 	site := r.URL.Query().Get("site")
 	if site == "" {
 		site = r.Header.Get("X-Mccms-Site")
+	}
+	// 前端只会传匿名来源键（s1..sN），这里解析回真实站点。
+	if real := realSourceKey(site); real != "" {
+		site = real
 	}
 	if site == "" {
 		site = s.cfg.Site
@@ -325,3 +421,19 @@ func contentTypeOf(path string) string {
 }
 
 var _ = fmt.Sprintf
+
+// adminNoStore 让管理后台相关的响应不被任何中间层或浏览器缓存。
+// 管理面板不随站点一起缓存到用户端：/api/admin/* 与 /admin 一律 no-store。
+func adminNoStore(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		p := r.URL.Path
+		if strings.HasPrefix(p, "/api/admin/") || p == "/admin" || strings.HasPrefix(p, "/admin/") {
+			h := w.Header()
+			h.Set("Cache-Control", "no-store, no-cache, must-revalidate, private")
+			h.Set("Pragma", "no-cache")
+			h.Set("Expires", "0")
+			h.Set("X-Robots-Tag", "noindex, nofollow")
+		}
+		next.ServeHTTP(w, r)
+	})
+}

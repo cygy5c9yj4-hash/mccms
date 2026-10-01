@@ -6,10 +6,18 @@ export interface TaskEntry {
   title: string
 }
 
-/** 漫画整本下载（Downloads 页）登记键 */
+/** 漫画整本下载（Downloads 页）登记键前缀；按用户分片实现任务归属 */
 export const COMIC_DL_LS_KEY = 'aura.dl.tasks'
-/** 小说导出（NovelDetail 发起、Downloads 页追踪）登记键 */
+/** 小说导出（NovelDetail 发起、Downloads 页追踪）登记键前缀 */
 export const NOVEL_EXPORT_LS_KEY = 'aura.novel.export.tasks'
+
+/**
+ * 按登录用户返回实际的 localStorage 键。
+ * 未登录时退回全局键（保持旧行为）；登录后任务互相隔离。
+ */
+export function scopedKey(key: string, userId?: string | null): string {
+  return userId ? `${key}.${userId}` : key
+}
 
 export function loadEntries(key: string): TaskEntry[] {
   try {

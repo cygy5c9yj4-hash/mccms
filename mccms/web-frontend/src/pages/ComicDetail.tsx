@@ -34,6 +34,8 @@ import type { FavoriteFolder } from '../components'
 import { RecommendDialog } from '../components/RecommendDialog'
 import { STATUS_LABEL, addEntry, COMIC_DL_LS_KEY, percentOf, statusColor } from '../downloadTasks'
 import { useToast } from '../toast'
+import { account } from '../account'
+import { currentSiteKey } from '../site'
 import type { ChapterSummary, ComicDetail as ComicDetailData, ComicDownloadTask, V2Comment } from '../types'
 
 function CommentNode({
@@ -154,7 +156,12 @@ export default function ComicDetail() {
   )
 
   useEffect(() => {
-    if (detail.data) setIsFav(Boolean(detail.data.is_favorite))
+    if (detail.data && user) {
+      account
+        .checkFavorite(currentSiteKey(), comicId)
+        .then((r) => setIsFav(Boolean(r.is_favorite)))
+        .catch(() => setIsFav(false))
+    }
   }, [detail.data])
 
   // 下载任务轮询：仅在有活跃任务且弹窗打开时进行，避免无谓请求。
@@ -203,20 +210,31 @@ export default function ComicDetail() {
   const commentList = Array.isArray(comments.data) ? comments.data : (comments.data?.list ?? [])
 
   const toggleFav = async () => {
+    if (!user) {
+      navigate('/login', { state: { from: `/comic/${encodeURIComponent(comicId)}` } })
+      return
+    }
     const desired = !isFav
     setFavLoading(true)
     try {
-      const res = await api.post<{
-        is_favorite?: boolean
-        result?: { type?: string; status?: string; msg?: string }
-      }>(`/api/v2/jm/comic/${encodeURIComponent(comicId)}/favorite`, { desired_state: desired })
-      const next = typeof res?.is_favorite === 'boolean' ? res.is_favorite : desired
-      setIsFav(next)
-      toast(next ? '已收藏' : '已取消收藏')
-      const opType = String(res?.result?.type ?? '').toLowerCase()
-      if (next && (opType === 'add' || opType === 'edit' || opType === 'move')) setFolderOpen(true)
+      if (desired) {
+        const d = detail.data as { title?: string; author?: string; cover_url?: string; tags?: string[] } | undefined
+        await account.addFavorite({
+          source: currentSiteKey(),
+          comic_id: comicId,
+          title: d?.title,
+          author: d?.author ?? undefined,
+          cover_url: d?.cover_url ?? undefined,
+          tags: d?.tags,
+        })
+      } else {
+        await account.removeFavorite(currentSiteKey(), comicId)
+      }
+      setIsFav(desired)
+      toast(desired ? '已收藏' : '已取消收藏')
+      if (desired) setFolderOpen(true)
     } catch (e) {
-      if (e instanceof ApiError && e.st === 1014) window.dispatchEvent(new Event('aura:unauthorized'))
+      if (e instanceof ApiError && e.st === 1014) navigate('/login')
       else toast(e instanceof ApiError ? e.message : '操作失败', 'error')
     } finally {
       setFavLoading(false)
@@ -224,10 +242,8 @@ export default function ComicDetail() {
   }
 
   const loadFolders = async (): Promise<FavoriteFolder[]> => {
-    const d = await api.get<{ folders?: { id: string; name: string }[] }>(
-      `/api/favorites${api.qs({ page: 1, folder_id: '0' })}`,
-    )
-    return (d?.folders ?? []).map((f) => ({ id: String(f.id ?? ''), name: String(f.name ?? '') }))
+    const d = await account.listFolders()
+    return (d.list ?? []).map((f) => ({ id: f.id, name: f.name }))
   }
 
   const applyFolder = async (choice: { kind: 'folder'; folderId: string } | { kind: 'new'; folderName: string }) => {
@@ -237,15 +253,26 @@ export default function ComicDetail() {
     }
     setFolderSaving(true)
     try {
-      const payload =
-        choice.kind === 'new'
-          ? { type: 'add', folder_name: choice.folderName, album_id: comicId }
-          : { type: 'move', folder_id: choice.folderId, album_id: comicId }
-      await api.post('/api/favorite_folder', payload)
+      if (choice.kind === 'new') {
+        const created = await account.createFolder(choice.folderName)
+        const createdId =
+          (created as { id?: string } | undefined)?.id ??
+          (await account.listFolders()).list.find((f) => f.name === choice.folderName)?.id
+        if (createdId)
+          await account.addFavorite({
+            source: currentSiteKey(),
+            comic_id: comicId,
+            folder_id: createdId,
+          })
+      } else {
+        const items = (await account.listFavorites()).list
+        const cur = items.find((f) => f.source === currentSiteKey() && f.comic_id === comicId)
+        if (cur) await account.moveFavorite(cur, choice.folderId)
+      }
       toast(choice.kind === 'new' ? '已新建并加入收藏夹' : '已移动到该收藏夹')
       setFolderOpen(false)
     } catch (e) {
-      if (e instanceof ApiError && e.st === 1014) window.dispatchEvent(new Event('aura:unauthorized'))
+      if (e instanceof ApiError && e.st === 1014) navigate('/login')
       else toast(e instanceof ApiError ? e.message : '收藏夹操作失败', 'error')
     } finally {
       setFolderSaving(false)

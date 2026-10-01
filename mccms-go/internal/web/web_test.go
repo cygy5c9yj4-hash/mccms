@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 
 	"github.com/mccms/mccms-go/internal/mc"
@@ -135,8 +136,25 @@ func TestEnvelopeGenericError(t *testing.T) {
 	}
 }
 
+// newTestServer 构造测试用服务。
+//
+// 账号库与下载目录都指向 t.TempDir()，避免测试写入工作区。
+func newTestServer(t *testing.T) *Server {
+	t.Helper()
+	s, err := New(Config{
+		Site:         mc.SiteTibiu,
+		AccountsPath: filepath.Join(t.TempDir(), "accounts.json"),
+		DownloadDir:  t.TempDir(),
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(func() { _ = s.Close() })
+	return s
+}
+
 func TestSiteOf(t *testing.T) {
-	s := New(Config{Site: mc.SiteTibiu})
+	s := newTestServer(t)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/sites?site=boylove", nil)
 	if got := s.siteOf(req); got != mc.SiteBoylove {
@@ -157,7 +175,7 @@ func TestSiteOf(t *testing.T) {
 
 // SPA 深链接必须回退到 index.html，否则刷新页面会 404。
 func TestStaticSPAFallback(t *testing.T) {
-	s := New(Config{Site: mc.SiteTibiu})
+	s := newTestServer(t)
 	handler := s.Handler()
 
 	for _, path := range []string{"/", "/search", "/comic/17001", "/reader/291931"} {
@@ -170,7 +188,7 @@ func TestStaticSPAFallback(t *testing.T) {
 }
 
 func TestDirectoryTraversalBlocked(t *testing.T) {
-	s := New(Config{Site: mc.SiteTibiu})
+	s := newTestServer(t)
 	rec := httptest.NewRecorder()
 	s.Handler().ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/../go.mod", nil))
 	if rec.Code == http.StatusOK && len(rec.Body.String()) > 0 &&

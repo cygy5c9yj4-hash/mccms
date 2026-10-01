@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 
 	"github.com/mccms/mccms-go/internal/client"
 	"github.com/mccms/mccms-go/internal/decode"
@@ -16,13 +17,14 @@ import (
 // ---- 与前端 types.ts 对齐的响应结构 -----------------------------------------
 
 type comicSummaryDTO struct {
-	Source   string   `json:"source"`
-	ComicID  string   `json:"comic_id"`
-	Title    string   `json:"title"`
-	Author   *string  `json:"author"`
-	CoverURL *string  `json:"cover_url"`
-	Tags     []string `json:"tags"`
-	Category *string  `json:"category"`
+	Source      string   `json:"source"`
+	SourceLabel string   `json:"source_label,omitempty"`
+	ComicID     string   `json:"comic_id"`
+	Title       string   `json:"title"`
+	Author      *string  `json:"author"`
+	CoverURL    *string  `json:"cover_url"`
+	Tags        []string `json:"tags"`
+	Category    *string  `json:"category"`
 }
 
 type chapterSummaryDTO struct {
@@ -75,12 +77,13 @@ func strPtr(s string) *string {
 
 func toSummaryDTO(s mc.ComicSummary) comicSummaryDTO {
 	return comicSummaryDTO{
-		Source:   s.Site,
-		ComicID:  s.ID,
-		Title:    s.Name,
-		Author:   strPtr(s.Author),
-		CoverURL: strPtr(s.Cover),
-		Tags:     nonNilTags(s.Tags),
+		Source:      anonSourceKey(s.Site),
+		SourceLabel: anonSourceLabel(anonSourceKey(s.Site)),
+		ComicID:     s.ID,
+		Title:       s.Name,
+		Author:      strPtr(s.Author),
+		CoverURL:    strPtr(s.Cover),
+		Tags:        nonNilTags(s.Tags),
 	}
 }
 
@@ -99,12 +102,13 @@ func comicToDetail(c *mc.Comic) comicDetailDTO {
 	fav := false
 	return comicDetailDTO{
 		comicSummaryDTO: comicSummaryDTO{
-			Source:   c.Site,
-			ComicID:  c.ComicID,
-			Title:    c.Name,
-			Author:   strPtr(c.Author()),
-			CoverURL: strPtr(c.Cover),
-			Tags:     nonNilTags(c.Tags),
+			Source:      anonSourceKey(c.Site),
+			SourceLabel: anonSourceLabel(anonSourceKey(c.Site)),
+			ComicID:     c.ComicID,
+			Title:       c.Name,
+			Author:      strPtr(c.Author()),
+			CoverURL:    strPtr(c.Cover),
+			Tags:        nonNilTags(c.Tags),
 		},
 		Description: strPtr(c.Description),
 		IsFavorite:  &fav,
@@ -132,7 +136,7 @@ func chapterToDetail(ch *mc.Chapter, site string) chapterDetailDTO {
 	}
 
 	return chapterDetailDTO{
-		Source:    site,
+		Source:    anonSourceKey(site),
 		ChapterID: ch.ChapterID,
 		Title:     strPtr(ch.Name),
 		Images:    pages,
@@ -176,10 +180,11 @@ func (s *Server) handleSites(w http.ResponseWriter, r *http.Request) {
 			caps["categories"] = true
 			caps["update"] = true
 		}
+		key := anonSourceKey(site)
 		out = append(out, siteInfo{
-			Key:          site,
-			Name:         mc.SiteName(site),
-			Domains:      mc.SiteDomains[site],
+			Key:          key,
+			Name:         anonSourceLabel(key),
+			Domains:      nil,
 			Capabilities: caps,
 		})
 	}
@@ -187,10 +192,17 @@ func (s *Server) handleSites(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
+	sites := make([]string, 0, len(mc.AllSites))
+	names := map[string]string{}
+	for _, site := range mc.AllSites {
+		key := anonSourceKey(site)
+		sites = append(sites, key)
+		names[key] = anonSourceLabel(key)
+	}
 	ok(w, map[string]any{
-		"site":         s.siteOf(r),
-		"sites":        mc.AllSites,
-		"site_names":   mc.SiteNames,
+		"site":         anonSourceKey(s.siteOf(r)),
+		"sites":        sites,
+		"site_names":   names,
 		"version":      "mccms-go 1.0.0",
 		"download_dir": s.cfg.DownloadDir,
 	})
@@ -215,7 +227,7 @@ func (s *Server) handleSiteMe(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	ok(w, map[string]any{"username": username, "is_admin": false, "site": site})
+	ok(w, map[string]any{"username": username, "is_admin": false, "site": anonSourceKey(site)})
 }
 
 // handleSiteLogin 本后端不使用自有账号体系；站点登录请用 cookies 配置。
@@ -292,6 +304,15 @@ func categoriesOf(site string) []categoryDTO {
 			categoryDTO{ID: "imageset", Title: "图集"},
 			categoryDTO{ID: "western", Title: "西方"},
 		)
+	case mc.SiteNhentai:
+		// 本站只收 yaoi 内容，这里的 key 是 nhentai 标签名，直接透传给客户端
+		return append(base,
+			categoryDTO{ID: "yaoi", Title: "男同"},
+			categoryDTO{ID: "bara", Title: "壮汉"},
+			categoryDTO{ID: "crossdressing", Title: "伪娘"},
+			categoryDTO{ID: "bdsm", Title: "调教"},
+			categoryDTO{ID: "full color", Title: "全彩"},
+		)
 	}
 	return base
 }
@@ -301,28 +322,51 @@ func (s *Server) handleCategories(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
-	site := s.siteOf(r)
-	c, err := s.clientOf(site)
-	if err != nil {
-		fail(w, err)
-		return
-	}
-
-	keyword := r.URL.Query().Get("q")
+	keyword := strings.TrimSpace(r.URL.Query().Get("q"))
 	if keyword == "" {
-		keyword = r.URL.Query().Get("keyword")
+		keyword = strings.TrimSpace(r.URL.Query().Get("keyword"))
 	}
 	page := queryInt(r, "page", 1)
-
-	res, err := c.Search(keyword, page)
-	if err != nil {
-		fail(w, err)
+	if keyword == "" {
+		ok(w, []comicSummaryDTO{})
 		return
 	}
 
-	out := make([]comicSummaryDTO, 0, len(res.Items))
-	for _, item := range res.Items {
-		out = append(out, toSummaryDTO(item))
+	// 跨源搜索：并行拉取后按来源轮转交错，任何单一来源都不会霸占列表；
+	// 每项只带匿名来源标签（来源1/来源2…），用户感知不到背后有几个站。
+	buckets := make([][]mc.ComicSummary, len(mc.AllSites))
+	var wg sync.WaitGroup
+	for i, site := range mc.AllSites {
+		wg.Add(1)
+		go func(idx int, site string) {
+			defer wg.Done()
+			c, err := s.clientOf(site)
+			if err != nil {
+				return
+			}
+			res, err := c.Search(keyword, page)
+			if err != nil || res == nil {
+				return
+			}
+			buckets[idx] = res.Items
+		}(i, site)
+	}
+	wg.Wait()
+
+	out := make([]comicSummaryDTO, 0, 48)
+	idx := make([]int, len(buckets))
+	for {
+		progressed := false
+		for i := range buckets {
+			if idx[i] < len(buckets[i]) {
+				out = append(out, toSummaryDTO(buckets[i][idx[i]]))
+				idx[i]++
+				progressed = true
+			}
+		}
+		if !progressed {
+			break
+		}
 	}
 	ok(w, out)
 }
@@ -352,6 +396,11 @@ func categoryOpts(site, category string) map[string]string {
 		}
 	case mc.SiteEhentai:
 		// E-Hentai 用分类位掩码筛选，key 直接透传给客户端解释
+		if category != "" && category != "0" {
+			opts["category"] = category
+		}
+	case mc.SiteNhentai:
+		// nhentai 的“分类”实为标签，直接透传
 		if category != "" && category != "0" {
 			opts["category"] = category
 		}
@@ -739,8 +788,8 @@ func (s *Server) handleDownloadTaskByID(w http.ResponseWriter, r *http.Request) 
 func (s *Server) createDownloadTask(w http.ResponseWriter, r *http.Request) {
 	body := readBody(r)
 	site := s.siteOf(r)
-	if v := mc.ToString(body["site"]); mc.KnownSite(v) {
-		site = v
+	if real := realSourceKey(mc.ToString(body["site"])); real != "" {
+		site = real
 	}
 
 	c, err := s.clientOf(site)

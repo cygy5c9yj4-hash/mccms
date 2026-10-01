@@ -31,6 +31,7 @@ import {
   percentOf,
   persistEntries as persistTaskEntries,
   removeEntry as removeTaskEntry,
+  scopedKey,
   statusColor,
   type TaskEntry,
 } from '../downloadTasks'
@@ -51,12 +52,21 @@ interface TaskPub {
 
 const LS_KEY = COMIC_DL_LS_KEY
 
+/** 模块级读当前用户 ID（auth provider 会镜像），供 localStorage 键分片 */
+function currentUserID(): string | null {
+  try {
+    return localStorage.getItem('aura.account.uid')
+  } catch {
+    return null
+  }
+}
+
 function loadEntries(): TaskEntry[] {
-  return loadTaskEntries(LS_KEY)
+  return loadTaskEntries(scopedKey(LS_KEY, currentUserID()))
 }
 
 function persistEntries(list: TaskEntry[]) {
-  persistTaskEntries(LS_KEY, list)
+  persistTaskEntries(scopedKey(LS_KEY, currentUserID()), list)
 }
 
 function asPub(v: unknown, fallbackTitle: string): TaskPub | null {
@@ -104,7 +114,7 @@ export default function Downloads() {
   const [input, setInput] = useState('')
   const [adding, setAdding] = useState(false)
   const [addErr, setAddErr] = useState<string | null>(null)
-  const [novelEntries, setNovelEntries] = useState<TaskEntry[]>(() => loadTaskEntries(NOVEL_EXPORT_LS_KEY))
+  const [novelEntries, setNovelEntries] = useState<TaskEntry[]>(() => loadTaskEntries(scopedKey(NOVEL_EXPORT_LS_KEY, currentUserID())))
   const [novelTasks, setNovelTasks] = useState<Record<string, NovelExportTask>>({})
 
   useEffect(() => {
@@ -136,7 +146,7 @@ export default function Downloads() {
     let alive = true
     let timer: number | undefined
     const poll = async () => {
-      const list = loadTaskEntries(NOVEL_EXPORT_LS_KEY)
+      const list = loadTaskEntries(scopedKey(NOVEL_EXPORT_LS_KEY, currentUserID()))
       await Promise.all(
         list.map(async (en) => {
           try {
