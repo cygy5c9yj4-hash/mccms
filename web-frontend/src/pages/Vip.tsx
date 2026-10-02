@@ -106,7 +106,7 @@ export default function Vip() {
 
   const active = !!status?.active
   const daysLeft = status?.days_left ?? 0
-  const price = status?.month_price?.trim() || ''
+  const price = fmtPrice(status?.month_price)
 
   return (
     <Box>
@@ -397,6 +397,15 @@ function JoinDialog({
       </DialogContent>
     </Dialog>
   )
+}
+
+function fmtPrice(v?: string) {
+  const s = (v ?? '').trim()
+  if (!s) return ''
+  const n = Number(s)
+  if (!Number.isFinite(n)) return s
+  if (Number.isInteger(n)) return String(n)
+  return s.replace(/0+$/, '').replace(/\.$/, '')
 }
 
 function fmtDate(v?: string | null) {
