@@ -326,8 +326,27 @@ function JoinDialog({
   price: string
 }) {
   const [copied, setCopied] = useState(false)
+  const [left, setLeft] = useState(READ_SECONDS)
+
+  // 阅读倒计时：弹窗打开后需等待 READ_SECONDS 秒才允许点击。
+  useEffect(() => {
+    if (!open) return
+    setLeft(READ_SECONDS)
+    setCopied(false)
+    const timer = setInterval(() => {
+      setLeft((v) => {
+        if (v <= 1) {
+          clearInterval(timer)
+          return 0
+        }
+        return v - 1
+      })
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [open])
 
   const copyAndGo = async () => {
+    if (left > 0) return
     try {
       await navigator.clipboard.writeText(username)
       setCopied(true)
@@ -350,24 +369,6 @@ function JoinDialog({
             <Typography color="text.secondary">/ 月</Typography>
           </Stack>
         )}
-
-        <Button
-          fullWidth
-          size="large"
-          variant="contained"
-          onClick={() => void copyAndGo()}
-          endIcon={copied ? <CheckCircleIcon /> : <OpenInNewIcon />}
-          sx={{
-            borderRadius: 999,
-            py: 1.4,
-            fontWeight: 700,
-            color: '#fff',
-            background: VIP_GRADIENT,
-            '&:hover': { background: VIP_GRADIENT, filter: 'brightness(1.05)' },
-          }}
-        >
-          {copied ? '已复制，去爱发电粘贴付款' : '复制用户名并跳转爱发电'}
-        </Button>
 
         <Typography sx={{ mt: 2.5, fontWeight: 700 }}>
           在付款页的「留言」框里粘贴用户名，然后付款
@@ -394,18 +395,44 @@ function JoinDialog({
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2, lineHeight: 1.7 }}>
           付款后一般几秒内自动开通。若未到账，回到本页点「已赞助？点此刷新状态」。
         </Typography>
+
+        <Button
+          fullWidth
+          size="large"
+          variant="contained"
+          disabled={left > 0}
+          onClick={() => void copyAndGo()}
+          endIcon={left > 0 ? undefined : copied ? <CheckCircleIcon /> : <OpenInNewIcon />}
+          sx={{
+            mt: 3,
+            borderRadius: 999,
+            py: 1.4,
+            fontWeight: 700,
+            color: '#fff',
+            background: VIP_GRADIENT,
+            '&:hover': { background: VIP_GRADIENT, filter: 'brightness(1.05)' },
+            '&.Mui-disabled': { background: VIP_GRADIENT, color: '#fff', opacity: 0.45 },
+          }}
+        >
+          {left > 0
+            ? `请先阅读说明（${left}s）`
+            : copied
+              ? '已复制，去爱发电粘贴付款'
+              : '复制用户名并跳转爱发电'}
+        </Button>
       </DialogContent>
     </Dialog>
   )
 }
+
+const READ_SECONDS = 10
 
 function fmtPrice(v?: string) {
   const s = (v ?? '').trim()
   if (!s) return ''
   const n = Number(s)
   if (!Number.isFinite(n)) return s
-  if (Number.isInteger(n)) return String(n)
-  return s.replace(/0+$/, '').replace(/\.$/, '')
+  return n.toFixed(2)
 }
 
 function fmtDate(v?: string | null) {
