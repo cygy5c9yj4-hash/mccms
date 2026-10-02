@@ -18,6 +18,7 @@ import TextField from '@mui/material/TextField'
 import Typography from '@mui/material/Typography'
 import CardMembershipIcon from '@mui/icons-material/CardMembership'
 import CheckCircleIcon from '@mui/icons-material/CheckCircle'
+import ContentCopyIcon from '@mui/icons-material/ContentCopy'
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore'
 import OpenInNewIcon from '@mui/icons-material/OpenInNew'
 import RedeemIcon from '@mui/icons-material/Redeem'
@@ -326,6 +327,7 @@ function JoinDialog({
   price: string
 }) {
   const [copied, setCopied] = useState(false)
+  const [nameCopied, setNameCopied] = useState(false)
   const [left, setLeft] = useState(READ_SECONDS)
 
   // 阅读倒计时：弹窗打开后需等待 READ_SECONDS 秒才允许点击。
@@ -333,6 +335,7 @@ function JoinDialog({
     if (!open) return
     setLeft(READ_SECONDS)
     setCopied(false)
+    setNameCopied(false)
     const timer = setInterval(() => {
       setLeft((v) => {
         if (v <= 1) {
@@ -357,6 +360,16 @@ function JoinDialog({
     window.open(AFDIAN_URL, '_blank', 'noopener,noreferrer')
   }
 
+  const copyName = async () => {
+    try {
+      await navigator.clipboard.writeText(username)
+      setNameCopied(true)
+      setTimeout(() => setNameCopied(false), 2000)
+    } catch {
+      /* 剪贴板不可用时用户可手动选中复制 */
+    }
+  }
+
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 4 } }}>
       <DialogTitle sx={{ fontWeight: 800, pb: 0.5 }}>{renew ? '续费会员' : '成为会员'}</DialogTitle>
@@ -376,6 +389,50 @@ function JoinDialog({
         <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, lineHeight: 1.7 }}>
           只填用户名，不要加别的内容（该框在爱发电页面上也叫「自定义信息」）。
         </Typography>
+
+        <Box
+          sx={{
+            mt: 1.5,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 2,
+            px: 1.5,
+            py: 1,
+            bgcolor: 'action.hover',
+          }}
+        >
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="caption" color="text.secondary">
+              你的用户名
+            </Typography>
+            <Typography
+              sx={{
+                fontFamily: 'monospace',
+                fontWeight: 800,
+                fontSize: 18,
+                lineHeight: 1.3,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {username}
+            </Typography>
+          </Box>
+          <Button
+            size="small"
+            variant={nameCopied ? 'contained' : 'outlined'}
+            color={nameCopied ? 'success' : 'primary'}
+            startIcon={nameCopied ? <CheckCircleIcon /> : <ContentCopyIcon />}
+            onClick={() => void copyName()}
+            sx={{ flexShrink: 0 }}
+          >
+            {nameCopied ? '已复制' : '复制'}
+          </Button>
+        </Box>
 
         <Box
           component="img"
