@@ -399,8 +399,9 @@ export function FavoriteFolderDialog({
 }
 
 /**
- * 在线人数小统计：把「获取人数」本身当作心跳，约每 45 秒打一次。
- * 网络失败时静默保留上一次数值，不打扰用户。
+ * 在线人数小统计：把「获取人数」本身当作心跳，每 60 秒打一次。
+ * 页面不可见时暂停心跳（真正的「在线」本就不含后台标签页），
+ * 重新可见时立即补一次；网络失败时静默保留上一次数值，不打扰用户。
  */
 export function OnlineStat() {
   const [online, setOnline] = useState<number | null>(null)
