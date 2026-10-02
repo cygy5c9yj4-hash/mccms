@@ -397,3 +397,56 @@ export function FavoriteFolderDialog({
     </Dialog>
   )
 }
+
+/**
+ * 在线人数小统计：把「获取人数」本身当作心跳，约每 45 秒打一次。
+ * 网络失败时静默保留上一次数值，不打扰用户。
+ */
+export function OnlineStat() {
+  const [online, setOnline] = useState<number | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    const beat = async () => {
+      try {
+        const data = await api.get<{ online: number }>('/api/online')
+        if (alive && typeof data?.online === 'number') setOnline(data.online)
+      } catch {
+        // 忽略：在线人数不影响主流程
+      }
+    }
+
+    // 页面不可见时停止心跳（真正的「在线」本就不含后台标签页），
+    // 重新可见时立刻补一次，避免显示过期数值。
+    const tick = () => {
+      if (document.visibilityState === 'visible') void beat()
+    }
+
+    void beat()
+    const timer = window.setInterval(tick, 60_000)
+    document.addEventListener('visibilitychange', tick)
+    return () => {
+      alive = false
+      window.clearInterval(timer)
+      document.removeEventListener('visibilitychange', tick)
+    }
+  }, [])
+
+  return (
+    <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75 }}>
+      <Box
+        sx={{
+          width: 7,
+          height: 7,
+          borderRadius: '50%',
+          bgcolor: 'success.main',
+          boxShadow: '0 0 6px',
+          color: 'success.main',
+        }}
+      />
+      <Typography variant="caption" color="text.secondary">
+        {online === null ? '在线人数统计中…' : `当前 ${online} 人在线`}
+      </Typography>
+    </Box>
+  )
+}

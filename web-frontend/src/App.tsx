@@ -48,7 +48,7 @@ import { useAuth } from './auth'
 import { useThemeMode } from './mode'
 import { useSiteConfig } from './siteConfig'
 import { BRAND_GRADIENT, VIP_ACCENT } from './theme'
-import { CenterLoading } from './components'
+import { CenterLoading, OnlineStat } from './components'
 import Announcement from './components/Announcement'
 
 const Home = lazy(() => import('./pages/Home'))
@@ -604,6 +604,9 @@ export default function App() {
             >
               关于 {name}
             </Typography>
+            <Box sx={{ mt: 1.5 }}>
+              <OnlineStat />
+            </Box>
           </Box>
         )}
       </Box>

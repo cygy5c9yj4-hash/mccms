@@ -59,6 +59,9 @@ type Server struct {
 	clients      map[string]client.Client // site -> client
 	options      map[string]download.Options
 	chapterCache *chapterImageCache
+
+	// online 在内存里统计在线人数（心跳式，进程重启后清零）。
+	online *onlineTracker
 }
 
 // New 创建服务，并初始化自有账号体系。
@@ -90,6 +93,7 @@ func New(cfg Config) (*Server, error) {
 		clients:      map[string]client.Client{},
 		options:      map[string]download.Options{},
 		chapterCache: newChapterImageCache(),
+		online:       newOnlineTracker(),
 	}
 
 	if !cfg.DisableAccounts {
@@ -181,6 +185,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/site/login", s.handleSiteLogin)
 	mux.HandleFunc("/api/site/logout", s.handleSiteLogout)
 	mux.HandleFunc("/api/announcement", s.handlePublicAnnouncement)
+	mux.HandleFunc("/api/online", s.handleOnline)
 	mux.HandleFunc("/api/home", s.handleHome)
 	mux.HandleFunc("/api/promote", s.handlePromote)
 	mux.HandleFunc("/api/latest", s.handleLatest)
