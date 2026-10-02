@@ -29,6 +29,7 @@ import { AFDIAN_URL, VIP_ACCENT, VIP_GRADIENT, VIP_SHEEN_DARK, VIP_SHEEN_LIGHT }
 import { useAuth } from '../auth'
 import { vip, type AfdianBinding, type VipStatus } from '../vip'
 import afdianGuide from '../assets/afdian-guide.png?inline'
+import afdianOrderGuide from '../assets/afdian-order-guide.png?inline'
 
 export default function Vip() {
   const { user } = useAuth()
@@ -638,6 +639,38 @@ function ClaimDialog({
           helperText="订单号可在爱发电「我的订单」里查看"
           sx={{ mt: 2 }}
         />
+
+        <Box
+          sx={{
+            mt: 2,
+            p: 1.5,
+            borderRadius: 3,
+            border: '1px dashed',
+            borderColor: 'divider',
+            bgcolor: (t) => alpha(t.palette.primary.main, 0.04),
+          }}
+        >
+          <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 0.5 }}>
+            如何查看订单号？
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1.9 }}>
+            ① 打开爱发电「我的订单」　② 找到对应订单　③ 点订单号右侧的「复制」
+          </Typography>
+          <Button
+            size="small"
+            endIcon={<OpenInNewIcon sx={{ fontSize: 14 }} />}
+            onClick={() => window.open('https://afdian.com/dashboard/order', '_blank', 'noopener')}
+            sx={{ mt: 0.5, px: 0, minWidth: 0, textTransform: 'none', fontWeight: 700 }}
+          >
+            打开爱发电订单页
+          </Button>
+          <Box
+            component="img"
+            src={afdianOrderGuide}
+            alt="爱发电订单号位置示意：在订单号右侧点「复制」"
+            sx={{ display: 'block', width: '100%', mt: 1, borderRadius: 2, border: '1px solid', borderColor: 'divider' }}
+          />
+        </Box>
         {err && (
           <Alert severity="error" sx={{ mt: 1.5 }}>
             {err}
