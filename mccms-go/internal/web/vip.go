@@ -227,6 +227,77 @@ func (s *Server) handleVipRedeem(w http.ResponseWriter, r *http.Request) {
 	}})
 }
 
+// handleVipClaim 让用户在付款时漏填「留言」的情况下，凭爱发电订单号自助归户。
+// 仅接受「支付成功(status=2)、尚未发放、且实付金额折算满一个月」的订单；
+// 已绑定到他人账号的订单一律拒绝。每次认领都写入审计日志，管理员可核对。
+func (s *Server) handleVipClaim(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		writeJSON(w, http.StatusMethodNotAllowed, map[string]any{"st": 1, "msg": "方法不允许"})
+		return
+	}
+	u, ok := s.requireUser(w, r)
+	if !ok {
+		return
+	}
+	m, err := s.vipManager()
+	if err != nil || m == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"st": 1, "msg": "卡密功能未启用"})
+		return
+	}
+	var body struct {
+		OrderID string `json:"order_id"`
+	}
+	if err := decodeBody(r, &body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"st": 1, "msg": "请求格式不正确"})
+		return
+	}
+	// 爱发电订单号可能被连着空格/换行一起复制进来，先做规范化。
+	orderID := strings.Join(strings.Fields(body.OrderID), "")
+	if orderID == "" {
+		writeJSON(w, http.StatusOK, map[string]any{"st": stError, "msg": "请填写爱发电订单号"})
+		return
+	}
+	ord, found := m.GetOrder(orderID)
+	if !found {
+		writeJSON(w, http.StatusOK, map[string]any{"st": stError, "msg": "没有找到这个订单号，请到爱发电「我的订单」里核对后重试"})
+		return
+	}
+	if ord.Status != 2 {
+		writeJSON(w, http.StatusOK, map[string]any{"st": stError, "msg": "该订单尚未支付成功，付款到账后请再试一次"})
+		return
+	}
+	if ord.CreditedAt != nil && ord.LinkedUserID != u.ID {
+		writeJSON(w, http.StatusOK, map[string]any{"st": stError, "msg": "该订单已绑定到其他账号，如有疑问请联系管理员"})
+		return
+	}
+	claimed := ord.CreditedAt == nil
+	if claimed && ord.Days <= 0 {
+		writeJSON(w, http.StatusOK, map[string]any{"st": stError, "msg": "该笔赞助折算不足一个月，暂未达到开通条件；如已足额付款请联系管理员处理"})
+		return
+	}
+	if claimed {
+		if _, _, err := m.LinkOrder(orderID, u.ID); err != nil {
+			writeJSON(w, statusForError(err), map[string]any{"st": 1, "msg": err.Error()})
+			return
+		}
+		_ = s.accountService().LogAudit(u, "vip.claim", u.ID, u.Username,
+			"凭订单号自助归户 "+orderID+"（付款时未填留言）", clientIP(r))
+	}
+	resp := map[string]any{
+		"tier":    string(account.TierFree),
+		"claimed": claimed,
+		"days":    ord.Days,
+	}
+	if fresh, ferr := s.currentUser(r); ferr == nil && fresh != nil {
+		resp["tier"] = string(fresh.EffectiveTier(time.Now()))
+		resp["username"] = fresh.Username
+		if fresh.TierExpiresAt != nil {
+			resp["expires_at"] = fresh.TierExpiresAt
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"st": stOK, "data": resp})
+}
+
 // ---- 管理端接口 ----
 
 func (s *Server) handleAdminVipCodes(w http.ResponseWriter, r *http.Request) {

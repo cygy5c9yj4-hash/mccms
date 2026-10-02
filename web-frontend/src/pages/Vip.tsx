@@ -39,6 +39,8 @@ export default function Vip() {
   const [redeeming, setRedeeming] = useState(false)
   const [redeemOpen, setRedeemOpen] = useState(false)
   const [joinOpen, setJoinOpen] = useState(false)
+  const [claimOpen, setClaimOpen] = useState(false)
+  const [waiting, setWaiting] = useState(false)
   const [msg, setMsg] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
 
   const reload = useCallback(async () => {
@@ -62,6 +64,45 @@ export default function Vip() {
   useEffect(() => {
     void reload()
   }, [reload])
+
+  // 跳转爱发电付款后自动轮询到账状态：每 6 秒一次，最长 10 分钟；
+  // 切回本页（切换标签 / 聚焦窗口）时立即补查一次。
+  useEffect(() => {
+    if (!waiting) return
+    let stopped = false
+    let stopTimer: ReturnType<typeof setTimeout> | undefined
+
+    const tick = async () => {
+      if (stopped) return
+      try {
+        const s = await vip.status()
+        setStatus(s)
+        if (s?.active) {
+          stopped = true
+          setWaiting(false)
+          setMsg({ kind: 'success', text: '会员已开通，感谢赞助！' })
+        }
+      } catch {
+        /* 轮询失败静默忽略，下一轮重试 */
+      }
+    }
+
+    const id = setInterval(() => void tick(), 6000)
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') void tick()
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('focus', onVisible)
+    stopTimer = setTimeout(() => setWaiting(false), 10 * 60 * 1000)
+
+    return () => {
+      stopped = true
+      clearInterval(id)
+      if (stopTimer) clearTimeout(stopTimer)
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('focus', onVisible)
+    }
+  }, [waiting])
 
   const doRedeem = useCallback(async () => {
     const c = code.trim()
@@ -213,13 +254,35 @@ export default function Vip() {
         {price ? ` · ¥${price}/月` : ''}
       </Button>
 
-      <Button
-        size="small"
-        onClick={() => void reload()}
-        sx={{ mt: 1.5, mx: 'auto', display: 'block', color: 'text.secondary' }}
+      {waiting && (
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 1.5, justifyContent: 'center' }}>
+          <CircularProgress size={14} thickness={6} />
+          <Typography variant="body2" color="text.secondary">
+            正在等待支付结果，付款成功后会自动开通…
+          </Typography>
+        </Stack>
+      )}
+
+      <Stack
+        direction="row"
+        spacing={{ xs: 1, sm: 3 }}
+        sx={{ mt: 1.5, justifyContent: 'center', flexWrap: 'wrap' }}
       >
-        已赞助？点此刷新状态
-      </Button>
+        <Button
+          size="small"
+          onClick={() => void reload()}
+          sx={{ color: 'text.secondary', textTransform: 'none' }}
+        >
+          已赞助？点此刷新状态
+        </Button>
+        <Button
+          size="small"
+          onClick={() => setClaimOpen(true)}
+          sx={{ color: 'text.secondary', textTransform: 'none' }}
+        >
+          我付款了但没开通
+        </Button>
+      </Stack>
 
       {/* 卡密兑换（默认收起） */}
       <Card sx={{ borderRadius: 5, mt: 2.5 }}>
@@ -296,6 +359,20 @@ export default function Vip() {
         username={user.username}
         renew={active}
         price={price}
+        onGo={() => setWaiting(true)}
+        onClaim={() => {
+          setJoinOpen(false)
+          setClaimOpen(true)
+        }}
+      />
+
+      <ClaimDialog
+        open={claimOpen}
+        onClose={() => setClaimOpen(false)}
+        onDone={(text) => {
+          setMsg({ kind: 'success', text })
+          void reload()
+        }}
       />
 
       <Snackbar
@@ -319,12 +396,16 @@ function JoinDialog({
   username,
   renew,
   price,
+  onGo,
+  onClaim,
 }: {
   open: boolean
   onClose: () => void
   username: string
   renew: boolean
   price: string
+  onGo: () => void
+  onClaim: () => void
 }) {
   const [copied, setCopied] = useState(false)
   const [nameCopied, setNameCopied] = useState(false)
@@ -358,6 +439,8 @@ function JoinDialog({
       /* 剪贴板不可用时仍允许跳转，用户可手动复制 */
     }
     window.open(AFDIAN_URL, '_blank', 'noopener,noreferrer')
+    // 跳转后开始轮询，付款成功即自动开通，用户无需再手动刷新。
+    onGo()
   }
 
   const copyName = async () => {
@@ -477,6 +560,110 @@ function JoinDialog({
               ? '已复制，去爱发电粘贴付款'
               : '复制用户名并跳转爱发电'}
         </Button>
+
+        <Button
+          fullWidth
+          size="small"
+          onClick={onClaim}
+          sx={{ mt: 1, color: 'text.secondary', textTransform: 'none' }}
+        >
+          付款了但忘了填留言？点此用订单号自助开通
+        </Button>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// 归户兜底：付款时漏填「留言」的用户，可凭爱发电订单号自助开通。
+function ClaimDialog({
+  open,
+  onClose,
+  onDone,
+}: {
+  open: boolean
+  onClose: () => void
+  onDone: (text: string) => void
+}) {
+  const [orderId, setOrderId] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  useEffect(() => {
+    if (!open) return
+    setOrderId('')
+    setErr('')
+    setBusy(false)
+  }, [open])
+
+  const submit = async () => {
+    const v = orderId.trim()
+    if (!v) {
+      setErr('请填写爱发电订单号')
+      return
+    }
+    setBusy(true)
+    setErr('')
+    try {
+      const r = await vip.claim(v)
+      onDone(
+        r?.claimed === false
+          ? '这笔订单此前已开通，会员状态已更新'
+          : `认领成功，会员已开通 ${r?.days ?? 0} 天`,
+      )
+      onClose()
+    } catch (e) {
+      setErr(errText(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 4 } }}>
+      <DialogTitle sx={{ fontWeight: 800 }}>我付款了但没开通</DialogTitle>
+      <DialogContent>
+        <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.7 }}>
+          如果你付款时忘了在「留言」里填用户名，在这里填上爱发电订单号，系统会自动为你开通。
+        </Typography>
+        <TextField
+          fullWidth
+          size="small"
+          label="爱发电订单号"
+          placeholder="例如 202610021234567890"
+          value={orderId}
+          onChange={(e) => setOrderId(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void submit()
+          }}
+          helperText="订单号可在爱发电「我的订单」里查看"
+          sx={{ mt: 2 }}
+        />
+        {err && (
+          <Alert severity="error" sx={{ mt: 1.5 }}>
+            {err}
+          </Alert>
+        )}
+        <Button
+          fullWidth
+          variant="contained"
+          disabled={busy}
+          onClick={() => void submit()}
+          sx={{
+            mt: 2,
+            borderRadius: 999,
+            py: 1.2,
+            fontWeight: 700,
+            color: '#fff',
+            background: VIP_GRADIENT,
+            '&:hover': { background: VIP_GRADIENT, filter: 'brightness(1.05)' },
+            '&.Mui-disabled': { background: VIP_GRADIENT, color: '#fff', opacity: 0.45 },
+          }}
+        >
+          {busy ? '认领中…' : '确认开通'}
+        </Button>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5, lineHeight: 1.7 }}>
+          只能认领你自己付款、且尚未开通的订单；一笔订单只能开通一次，若仍失败请联系管理员。
+        </Typography>
       </DialogContent>
     </Dialog>
   )

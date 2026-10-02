@@ -188,6 +188,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/afdian/sponsors", s.handleAfdian)
 	mux.HandleFunc("/api/vip/status", s.handleVipStatus)
 	mux.HandleFunc("/api/vip/redeem", s.handleVipRedeem)
+	mux.HandleFunc("/api/vip/claim", s.handleVipClaim)
 	mux.HandleFunc("/api/webhook/afdian", s.handleAfdianWebhook)
 
 	mux.HandleFunc("/api/image-proxy", s.handleImageProxy)

@@ -62,6 +62,16 @@ export const vip = {
     api.post<{ tier: string; days: number; expires_at: string }>('/api/vip/redeem', { code }),
   afdian: () => api.get<AfdianBinding>('/api/me/afdian'),
   unbindAfdian: () => api.post<{ bound: boolean }>('/api/me/afdian/unbind', {}),
+
+  /** 付款时漏填「留言」的用户，可凭爱发电订单号自助归户并立即开通。 */
+  claim: (orderId: string) =>
+    api.post<{
+      tier: string
+      claimed: boolean
+      days: number
+      username?: string
+      expires_at?: string | null
+    }>('/api/vip/claim', { order_id: orderId }),
 }
 
 export const adminVip = {
