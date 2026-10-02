@@ -176,6 +176,7 @@ func (s *Server) handleVipStatus(w http.ResponseWriter, r *http.Request) {
 		"free_comics": sortedKeys(s.freeComicSet()),
 		"tier":        string(account.TierFree),
 		"active":      false,
+		"month_price": s.getSetting(settingVipMonthPrice, ""),
 	}
 	if u, err := s.currentUser(r); err == nil && u != nil {
 		tier := u.EffectiveTier(now)

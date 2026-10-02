@@ -8,6 +8,8 @@ export interface VipStatus {
   expires_at?: string | null
   days_left?: number
   free_comics: string[]
+  /** 会员月费（元）。空串表示未设置，此时按爱发电方案月数发放。 */
+  month_price?: string
 }
 
 export interface RedeemCode {
